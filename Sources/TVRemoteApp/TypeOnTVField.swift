@@ -1,8 +1,10 @@
 import SwiftUI
 
-/// Text field that sends what you type to the TV's on-screen keyboard (e.g. YouTube search).
+/// Sends text to the TV: Return types into the open Samsung keyboard (local network),
+/// the magnifier runs the TV's own search (SmartThings cloud).
 struct TypeOnTVField: View {
     let model: TypingViewModel
+    let canSearch: Bool
     // `@State` is a macro whose plugin only ships with Xcode; see TokenView.
     private let textState = State(initialValue: "")
     private let addressState = State(initialValue: "")
@@ -13,17 +15,26 @@ struct TypeOnTVField: View {
                 Image(systemName: "keyboard")
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(.secondary)
-                TextField("Type on TV…", text: textState.projectedValue)
+                TextField("Type or search on TV…", text: textState.projectedValue)
                     .textFieldStyle(.plain)
                     .font(.system(size: 12))
                     .onSubmit(send)
+                if canSearch {
+                    Button(action: search) {
+                        Image(systemName: "magnifyingglass.circle.fill").font(.system(size: 17))
+                    }
+                    .buttonStyle(.borderless)
+                    .foregroundStyle(.secondary)
+                    .disabled(isBusyOrEmpty)
+                    .help("Search on TV")
+                }
                 Button(action: send) {
                     Image(systemName: "arrow.up.circle.fill").font(.system(size: 17))
                 }
                 .buttonStyle(.borderless)
                 .foregroundStyle(.tint)
-                .disabled(textState.wrappedValue.isEmpty || model.status == .sending)
-                .help("Send to TV (Return)")
+                .disabled(isBusyOrEmpty)
+                .help("Type into the TV's open keyboard (Return)")
             }
             .padding(.leading, 12)
             .padding(.trailing, 5)
@@ -38,11 +49,15 @@ struct TypeOnTVField: View {
     private var statusLine: some View {
         switch model.status {
         case .idle:
-            caption("Open a search box on the TV, then type here.", style: .secondary)
+            caption(canSearch
+                ? "Return types into the TV's open keyboard. 🔍 runs a TV search."
+                : "Open a search box on the TV, then type here.", style: .secondary)
         case .sending:
             caption("Sending… The first time, choose Allow on the TV.", style: .secondary)
         case .sent:
-            caption("Sent to TV.", style: .green)
+            caption("Sent to TV. YouTube ignores this; use 🔍 there.", style: .green)
+        case .searched:
+            caption("Search sent to TV.", style: .green)
         case .failed(let message, let canEnterAddress):
             caption(message, style: .orange)
             if canEnterAddress { addressField }
@@ -68,6 +83,18 @@ struct TypeOnTVField: View {
             .foregroundStyle(style)
             .fixedSize(horizontal: false, vertical: true)
             .padding(.horizontal, 4)
+    }
+
+    private var isBusyOrEmpty: Bool {
+        textState.wrappedValue.isEmpty || model.status == .sending
+    }
+
+    private func search() {
+        let query = textState.wrappedValue
+        Task {
+            await model.search(query)
+            if model.status == .searched { textState.wrappedValue = "" }
+        }
     }
 
     private func send() {

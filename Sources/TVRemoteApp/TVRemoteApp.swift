@@ -21,8 +21,11 @@ struct TVRemoteApp: App {
             hostFinder: hostFinder,
             tokenStore: FileTokenStore(name: "local-tv-token")
         )
-        typing = TypingViewModel(keyboard: localTV)
-        shortcuts = AppShortcutsViewModel(launcher: localTV)
+        typing = TypingViewModel(keyboard: localTV) { [model] query in try await model.search(query) }
+        shortcuts = AppShortcutsViewModel(
+            knownApps: PopularApps.all,
+            installedAppFinder: LocalInstalledApps(hostFinder: hostFinder)
+        )
         localTVs = LocalTVPickerViewModel(hostFinder: hostFinder) {
             await hostFinder.forgetDiscoveredHost()
             await localTV.disconnect()

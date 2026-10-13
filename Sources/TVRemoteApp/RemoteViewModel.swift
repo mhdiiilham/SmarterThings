@@ -86,6 +86,19 @@ final class RemoteViewModel {
         send(command)
     }
 
+    func launch(_ app: TVApp) {
+        send(.launch(app))
+    }
+
+    /// Throws so the search field can show its own result instead of replacing the remote.
+    func search(_ query: String) async throws {
+        guard let tv = selectedTV else { return }
+        try await controller.send(.search(query), to: tv)
+    }
+
+    var canLaunchApps: Bool { selectedTV?.canLaunchApps ?? false }
+    var canSearch: Bool { selectedTV?.canSearch ?? false }
+
     func supports(_ key: RemoteKey) -> Bool {
         selectedTV?.supports(key) ?? false
     }

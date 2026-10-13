@@ -44,11 +44,16 @@ Your TV appears by its SmartThings name. If you have several TVs, a picker shows
 
 Buttons the TV doesn't support are greyed out.
 
-### 3. Type on the TV
+### 3. Type and search on the TV
 
-Open a search box on the TV (for example in the TV's browser), type in **Type on TV…** and press **Return**. The text is sent when you press Return, not as you type.
+The field at the bottom does two things:
 
-The first time, two prompts appear:
+- **Return (↑)** types into whatever **Samsung keyboard** is open on the TV, e.g. Tizen's own search or the browser's address bar. It goes over the local network.
+- **🔍** runs the **TV's own search** with your text and shows Samsung's search results. It goes through the SmartThings cloud, so it works anywhere and needs no pairing.
+
+Use 🔍 for YouTube: its search box uses YouTube's own keyboard, which ignores typed text.
+
+The first time you press Return, two prompts appear:
 1. **macOS** asks to allow TV Remote to access the local network. Click Allow.
 2. **The TV** asks whether to allow "TV Remote (Mac)". Accept it with the physical remote.
 
@@ -56,7 +61,7 @@ The app finds the TV on your network automatically. If you have several Samsung 
 
 ### 4. App shortcuts
 
-Click ✎ next to **Shortcuts** to load the apps installed on the TV, tick up to four, then click ✓. Clicking a tile opens that app on the TV.
+Click ✎ next to **Shortcuts**. The app checks which known apps are installed on the TV and lists only those, using the TV's names. Tick up to four, then click ✓. Clicking a tile opens that app on the TV through SmartThings, which also works away from home.
 
 ## How it works
 
@@ -64,9 +69,9 @@ The app reaches the TV in two ways, because neither one can do everything:
 
 | | SmartThings cloud | Local network |
 |---|---|---|
-| Used for | All remote buttons, power state, inputs | Typing text, listing and opening apps |
-| Endpoint | `https://api.smartthings.com/v1` | `wss://<tv-ip>:8002/api/v2/channels/samsung.remote.control` |
-| Auth | Personal Access Token (Bearer) | TV pairing token, issued after you click "Allow" on the TV |
+| Used for | Remote buttons, power state, inputs, opening apps, TV search | Typing into the open keyboard, checking installed apps, finding the TV |
+| Endpoint | `https://api.smartthings.com/v1` | `wss://<tv-ip>:8002/...` (typing), `http://<tv-ip>:8001/api/v2/...` (info, apps) |
+| Auth | Personal Access Token (Bearer) | Typing: TV pairing token, issued after you click "Allow" on the TV. Info and apps: none |
 | Works | Anywhere with internet | Only on the same network as the TV |
 
 ### SmartThings cloud
@@ -83,16 +88,17 @@ The app reaches the TV in two ways, because neither one can do everything:
 | D-pad, OK, Back, Home, Menu | `samsungvd.remoteControl` → `send` with `[KEY, "PRESS_AND_RELEASED"]` |
 | Media | `mediaPlayback` → `play` / `pause` / `stop` / `rewind` / `fastForward` |
 | Source | `samsungvd.mediaInputSource` → `setInputSource` with an input ID |
+| App shortcut | `custom.launchapp` → `launchApp` with `[appId, appName]` |
+| 🔍 search | `custom.tvsearch` → `search` with `[query, ""]` |
+
+The command shapes come from SmartThings' capability definitions (`GET /capabilities/{id}/1`). For example, `samsungvd.remoteControl.send` takes a `keyValue` and an optional `keyState`.
 
 ### Local network (Samsung Tizen remote protocol)
 
-1. **Discovery.** SSDP `M-SEARCH` for `urn:samsung.com:device:RemoteControlReceiver:1` (older TVs) and `urn:dial-multiscreen-org:service:dial:1` (newer TVs, e.g. 2025 models), keeping only replies whose `SERVER` header says Samsung. A manually entered IP is used only when discovery finds nothing, so a TV that gets a new IP from the router is found again automatically.
-2. **Connect.** A WebSocket to port 8002, with the app name base64-encoded in `name` and the saved pairing token in `token`. The TV replies `ms.channel.connect`; the first time, that reply includes the new token. The TV uses a self-signed certificate, which the app trusts only for the TV's own address.
-3. **Typing.** `ms.remote.control` with `TypeOfRemote: "SendInputString"` and base64 text, then `SendInputEnd` to apply it.
-   Each reply's address is then asked for `http://<host>:8001/api/v2/`, which gives the TV's name and its stable `uuid:` ID; only `type: "Samsung SmartTV"` is kept. The TV chosen in the footer menu is matched by that ID.
-4. **Apps.** `ms.channel.emit` with `ed.installedApp.get` lists the apps. `ed.apps.launch` opens one, using `DEEP_LINK` for web apps (`app_type` 2) and `NATIVE_LAUNCH` for the others.
-
-The TV drops idle connections, so a failed send reconnects once and retries.
+1. **Discovery.** SSDP `M-SEARCH` for `urn:samsung.com:device:RemoteControlReceiver:1` (older TVs) and `urn:dial-multiscreen-org:service:dial:1` (newer TVs, e.g. 2025 models), keeping only replies whose `SERVER` header says Samsung. Each reply's address is then asked for `http://<host>:8001/api/v2/`, which gives the TV's name and its stable `uuid:` ID; only `type: "Samsung SmartTV"` is kept. The TV chosen in the footer menu is matched by that ID. A manually entered IP is used only when discovery finds nothing, so a TV that gets a new IP from the router is found again automatically.
+2. **Installed apps.** For each known app ID, `GET http://<tv-ip>:8001/api/v2/applications/<id>` returns 200 with the app's name if it's installed, or 404 if not. There's no cloud API for listing apps, and `ed.installedApp.get` over the WebSocket isn't confirmed to work on newer firmware.
+3. **Connect (for typing).** A WebSocket to port 8002, with the app name base64-encoded in `name` and the saved pairing token in `token`. The TV replies `ms.channel.connect`; the first time, that reply includes the new token. The TV uses a self-signed certificate, which the app trusts only for the TV's own address. The TV drops idle connections, so a failed send reconnects once and retries.
+4. **Typing.** `ms.remote.control` with `TypeOfRemote: "SendInputString"` and base64 text, then `SendInputEnd` to apply it.
 
 ### Code layout
 
@@ -100,11 +106,12 @@ Clean architecture: the UI depends on the core, and the core's domain doesn't de
 
 ```
 Sources/TVRemoteCore/
-  Domain/           RemoteKey, TV, TVApp, TVCommand, and the ports
-                    TVController, TVKeyboard, TVAppLauncher, TokenStore
+  Domain/           RemoteKey, TV, TVApp, TVCommand, LocalTVDevice, and the ports
+                    TVController, TVKeyboard, InstalledAppFinder, TokenStore
   Infrastructure/   SmartThingsClient (cloud), LocalTVRemote + LocalRemoteProtocol
-                    (local WebSocket), SSDPDiscovery, TVHostFinder, FileTokenStore
-Sources/TVRemoteApp/  SwiftUI MenuBarExtra: views and view models
+                    (typing), LocalInstalledApps, SSDPDiscovery, LocalTVDiscovery,
+                    TVHostFinder, FileTokenStore
+Sources/TVRemoteApp/  SwiftUI MenuBarExtra: views, view models, PopularApps (known app IDs)
 Tests/TVRemoteCoreTests/  Swift Testing, using fake HTTP transport and token stores
 scripts/bundle.sh     builds TVRemote.app (Info.plist, ad-hoc signature)
 ```
@@ -124,11 +131,12 @@ The token folder is readable only by your user account (0700, with files 0600). 
 - **SmartThings tokens expire after 24 hours.** Personal Access Tokens created since late 2024 are short-lived. When one expires, the remote asks for a new one. A long-lived connection would need SmartThings OAuth through a registered SmartApp, which this app doesn't implement.
 - **Power on depends on the TV.** Turning the TV on from the cloud only works if network standby is enabled on the TV. Turning it off always works.
 - **Power and mute state can drift.** Power is re-read each time you open the remote. Mute state is only tracked locally, so it can get out of sync if you use the physical remote.
-- **Typing is sent on Return, and only into Samsung's keyboard.** Apps that draw their own on-screen keyboard (possibly YouTube) may ignore the text.
-- **Some TVs don't list apps.** Some newer Samsung firmware doesn't answer `ed.installedApp.get`. Shortcuts then show "The TV didn't answer".
+- **Typing only reaches Samsung's keyboard.** YouTube draws its own keyboard and ignores typed text; use 🔍 search there. Text is sent on Return, not as you type.
+- **Shortcuts only know listed apps.** The picker checks the app IDs in `PopularApps.swift` against the TV, so an installed app missing from that list won't appear. Add its Tizen app ID to the list to include it.
+- **TV search shows Samsung's results page.** 🔍 runs the TV's universal search; it doesn't open a specific app's search directly.
 - **App tiles show letters, not icons.** Tiles are colored letters; the TV's icons aren't downloaded.
 - **One TV pairing at a time.** Only one local TV token is stored, so switching between TVs makes the new TV ask "Allow" again.
-- **The local features need the same network.** Typing and shortcuts don't work away from home, though the cloud buttons do.
+- **Some features need the same network.** Typing, finding the TV and checking installed apps need it. Buttons, shortcuts and 🔍 search work anywhere.
 - **Older TVs aren't supported.** Models from 2014–2015 use an older PIN-based pairing protocol.
 - **It isn't notarized.** The app is ad-hoc signed for local use. Sharing a built copy would trigger Gatekeeper warnings on other Macs.
 - **SwiftUI `@State` isn't used.** In the macOS 27 SDK, `@State` is a macro whose plugin ships only with Xcode. The views use the `State` type directly so the app builds with Command Line Tools alone.
@@ -138,9 +146,13 @@ The token folder is readable only by your user account (0700, with files 0600). 
 | Feature | Verified on a real TV |
 |---|---|
 | SmartThings connection, TV detection | ✅ |
+| D-pad arguments | ✅ Match SmartThings' `samsungvd.remoteControl` definition |
+| Finding the TV on the network (2025 model) | ✅ |
+| Typing into Tizen's own search | ✅ (YouTube ignores it, as noted above) |
+| 🔍 TV search (`custom.tvsearch`) | ✅ Shows results |
+| Checking installed apps (`/api/v2/applications/<id>`) | ✅ 7 of 31 known IDs found on the test TV |
+| Opening apps (`custom.launchapp`) | ❓ Not tested yet |
 | Power toggle and the other cloud buttons | Not explicitly confirmed yet |
-| D-pad arguments (`PRESS_AND_RELEASED`) | ❓ Not confirmed. Check here first if the D-pad does nothing. |
-| Typing, app list, app launch | ❓ Not tested on a TV yet |
 
 The protocol messages and API calls are covered by unit tests (`make test`). The rows marked ❓ still need a check against a real TV.
 

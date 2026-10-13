@@ -1,9 +1,10 @@
 import SwiftUI
 import TVRemoteCore
 
-/// Up to four favorite TV apps; the pencil switches to picking them from the TV's installed apps.
+/// Up to four favorite TV apps; the pencil switches to picking them from the popular-app list.
 struct AppShortcutsSection: View {
     let model: AppShortcutsViewModel
+    let onLaunch: (TVApp) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -24,13 +25,6 @@ struct AppShortcutsSection: View {
             }
 
             if model.isEditing { picker } else { tiles }
-
-            if case .failed(let message) = model.status {
-                Text(message)
-                    .font(.system(size: 10))
-                    .foregroundStyle(.orange)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
         }
     }
 
@@ -40,7 +34,7 @@ struct AppShortcutsSection: View {
                 Group {
                     if slot < model.favorites.count {
                         let app = model.favorites[slot]
-                        AppTile(app: app) { model.launch(app) }
+                        AppTile(app: app) { onLaunch(app) }
                     } else {
                         AddTile { Task { await model.startEditing() } }
                     }
@@ -52,28 +46,34 @@ struct AppShortcutsSection: View {
 
     @ViewBuilder
     private var picker: some View {
-        if model.status == .loading {
+        if model.isCheckingTV {
             HStack(spacing: 8) {
                 ProgressView().controlSize(.small)
-                Text("Asking the TV for its apps…").font(.system(size: 11)).foregroundStyle(.secondary)
+                Text("Checking which apps are on the TV…").font(.system(size: 11)).foregroundStyle(.secondary)
             }
             .frame(maxWidth: .infinity, minHeight: 60)
-        } else if !model.installedApps.isEmpty {
-            Text("Pick up to \(AppShortcutsViewModel.maxFavorites)")
+        } else {
+            appList
+        }
+    }
+
+    private var appList: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(model.isShowingAllKnownApps
+                ? "Couldn't reach the TV, so showing all known apps. Pick up to \(AppShortcutsViewModel.maxFavorites)."
+                : "Installed on your TV. Pick up to \(AppShortcutsViewModel.maxFavorites).")
                 .font(.system(size: 10))
                 .foregroundStyle(.secondary)
-            ScrollView {
-                VStack(spacing: 2) {
-                    ForEach(model.installedApps) { app in
-                        AppPickerRow(
-                            app: app,
-                            isFavorite: model.isFavorite(app),
-                            isEnabled: model.isFavorite(app) || model.canAddFavorite
-                        ) { model.toggleFavorite(app) }
-                    }
+                .fixedSize(horizontal: false, vertical: true)
+            VStack(spacing: 2) {
+                ForEach(model.availableApps) { app in
+                    AppPickerRow(
+                        app: app,
+                        isFavorite: model.isFavorite(app),
+                        isEnabled: model.isFavorite(app) || model.canAddFavorite
+                    ) { model.toggleFavorite(app) }
                 }
             }
-            .frame(maxHeight: 200)
         }
     }
 }

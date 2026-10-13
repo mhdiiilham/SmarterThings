@@ -1,28 +1,25 @@
 import Foundation
 
-/// Talks to the TV directly over its local remote WebSocket (wss, port 8002):
-/// typing text and listing/opening apps, which the SmartThings cloud can't do.
+/// Talks to the TV directly over its local remote WebSocket (wss, port 8002) to type text
+/// into Samsung's on-screen keyboard, which the SmartThings cloud can't do.
 /// The first connection makes the TV ask "Allow?"; the token it then sends is reused.
-public actor LocalTVRemote: TVKeyboard, TVAppLauncher {
+public actor LocalTVRemote: TVKeyboard {
     private let hostFinder: TVHostFinder
     private let tokenStore: TokenStore
     private let appName: String
     private let approvalTimeout: Duration
-    private let replyTimeout: Duration
     private var socket: URLSessionWebSocketTask?
 
     public init(
         hostFinder: TVHostFinder,
         tokenStore: TokenStore,
         appName: String = "TV Remote (Mac)",
-        approvalTimeout: Duration = .seconds(30),
-        replyTimeout: Duration = .seconds(5)
+        approvalTimeout: Duration = .seconds(30)
     ) {
         self.hostFinder = hostFinder
         self.tokenStore = tokenStore
         self.appName = appName
         self.approvalTimeout = approvalTimeout
-        self.replyTimeout = replyTimeout
     }
 
     public func type(_ text: String) async throws {
@@ -32,19 +29,6 @@ public actor LocalTVRemote: TVKeyboard, TVAppLauncher {
         }
     }
 
-    public func installedApps() async throws -> [TVApp] {
-        let timeout = replyTimeout
-        return try await withSocket { socket in
-            try await socket.send(.string(LocalRemoteProtocol.installedAppsRequest))
-            return try await Self.firstMatch(on: socket, timeout: timeout, LocalRemoteProtocol.parseInstalledApps)
-        }
-    }
-
-    public func launch(_ app: TVApp) async throws {
-        try await withSocket { socket in
-            try await socket.send(.string(LocalRemoteProtocol.launchMessage(app)))
-        }
-    }
 
     /// Closes the connection, e.g. after switching to another TV.
     public func disconnect() {

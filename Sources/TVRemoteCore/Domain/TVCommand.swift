@@ -10,3 +10,15 @@ public struct TVCommand: Equatable, Sendable {
         self.arguments = arguments
     }
 }
+
+extension TVCommand {
+    /// Opens an app through SmartThings; the name is a fallback if the ID is unknown to the TV.
+    public static func launch(_ app: TVApp) -> TVCommand {
+        TVCommand(capability: "custom.launchapp", command: "launchApp", arguments: [app.id, app.name])
+    }
+
+    /// Runs the TV's own search (Samsung's universal search) for `query`.
+    public static func search(_ query: String) -> TVCommand {
+        TVCommand(capability: "custom.tvsearch", command: "search", arguments: [query, ""])
+    }
+}

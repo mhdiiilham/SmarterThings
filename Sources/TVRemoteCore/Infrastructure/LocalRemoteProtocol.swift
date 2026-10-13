@@ -34,25 +34,6 @@ enum LocalRemoteProtocol {
     /// Closes the TV keyboard and applies the text, which submits search fields.
     static let inputEndMessage = remoteControl(["TypeOfRemote": "SendInputEnd"])
 
-    static let installedAppsRequest = emit(event: "ed.installedApp.get")
-
-    static func launchMessage(_ app: TVApp) -> String {
-        let actionType = app.kind == .deepLink ? "DEEP_LINK" : "NATIVE_LAUNCH"
-        return emit(event: "ed.apps.launch", data: ["appId": app.id, "action_type": actionType])
-    }
-
-    /// `nil` when the message is some other event; the TV also sends unrelated broadcasts.
-    static func parseInstalledApps(_ message: String) -> [TVApp]? {
-        guard let json = jsonObject(message), json["event"] as? String == "ed.installedApp.get" else { return nil }
-        let entries = (json["data"] as? [String: Any])?["data"] as? [[String: Any]] ?? []
-        return entries.compactMap { entry in
-            guard let id = entry["appId"] as? String, let name = entry["name"] as? String else { return nil }
-            // app_type 2 = web app (deep link); 4 = native Tizen app.
-            let kind: TVApp.Kind = entry["app_type"] as? Int == 2 ? .deepLink : .native
-            return TVApp(id: id, name: name, kind: kind)
-        }
-    }
-
     static func parseEvent(_ message: String) -> Event {
         guard let json = jsonObject(message) else { return .other }
         switch json["event"] as? String {
@@ -70,11 +51,6 @@ enum LocalRemoteProtocol {
         encode(["method": "ms.remote.control", "params": params])
     }
 
-    private static func emit(event: String, data: [String: String]? = nil) -> String {
-        var params: [String: Any] = ["event": event, "to": "host"]
-        params["data"] = data
-        return encode(["method": "ms.channel.emit", "params": params])
-    }
 
     private static func encode(_ message: [String: Any]) -> String {
         let data = try! JSONSerialization.data(withJSONObject: message, options: .sortedKeys)

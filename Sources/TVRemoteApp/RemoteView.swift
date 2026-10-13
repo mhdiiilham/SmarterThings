@@ -40,8 +40,10 @@ struct RemoteView: View {
     private var remote: some View {
         VStack(spacing: 18) {
             buttons
-            AppShortcutsSection(model: shortcuts)
-            TypeOnTVField(model: typing)
+            if model.canLaunchApps {
+                AppShortcutsSection(model: shortcuts, onLaunch: model.launch)
+            }
+            TypeOnTVField(model: typing, canSearch: model.canSearch)
         }
     }
 

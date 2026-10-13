@@ -34,41 +34,6 @@ struct LocalRemoteProtocolTests {
         #expect(LocalRemoteProtocol.parseEvent(message) == expected)
     }
 
-    @Test func installedAppsRequestEmitsToHost() throws {
-        let json = try object(LocalRemoteProtocol.installedAppsRequest)
-        #expect(json["method"] as? String == "ms.channel.emit")
-        #expect(json["params"] as? [String: String] == ["event": "ed.installedApp.get", "to": "host"])
-    }
-
-    @Test(arguments: [(TVApp.Kind.deepLink, "DEEP_LINK"), (.native, "NATIVE_LAUNCH")])
-    func launchMessageUsesActionTypeForKind(kind: TVApp.Kind, actionType: String) throws {
-        let app = TVApp(id: "111299001912", name: "YouTube", kind: kind)
-        let params = try #require(try object(LocalRemoteProtocol.launchMessage(app))["params"] as? [String: Any])
-        #expect(params["event"] as? String == "ed.apps.launch")
-        #expect(params["data"] as? [String: String] == ["appId": "111299001912", "action_type": actionType])
-    }
-
-    @Test func parsesInstalledApps() {
-        let message = #"""
-        {"event":"ed.installedApp.get","data":{"data":[
-          {"appId":"111299001912","name":"YouTube","app_type":2},
-          {"appId":"3201907018807","name":"Netflix","app_type":4},
-          {"name":"broken entry"}]}}
-        """#
-        #expect(LocalRemoteProtocol.parseInstalledApps(message) == [
-            TVApp(id: "111299001912", name: "YouTube", kind: .deepLink),
-            TVApp(id: "3201907018807", name: "Netflix", kind: .native),
-        ])
-    }
-
-    @Test func otherEventsAreNotAppLists() {
-        #expect(LocalRemoteProtocol.parseInstalledApps(#"{"event":"ms.channel.clientConnect"}"#) == nil)
-    }
-
-    private func object(_ message: String) throws -> [String: Any] {
-        try #require(try JSONSerialization.jsonObject(with: Data(message.utf8)) as? [String: Any])
-    }
-
     private func params(of message: String) throws -> [String: String]? {
         let json = try JSONSerialization.jsonObject(with: Data(message.utf8)) as? [String: Any]
         #expect(json?["method"] as? String == "ms.remote.control")

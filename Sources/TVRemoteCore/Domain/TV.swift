@@ -18,6 +18,9 @@ public struct TV: Hashable, Identifiable, Sendable {
         capabilities.contains(key.command.capability)
     }
 
+    public var canLaunchApps: Bool { capabilities.contains("custom.launchapp") }
+    public var canSearch: Bool { capabilities.contains("custom.tvsearch") }
+
     /// Newer TVs expose Samsung's own input capability with friendly names; prefer it.
     public var inputSourceCapability: String? {
         ["samsungvd.mediaInputSource", "mediaInputSource"].first(where: capabilities.contains)
