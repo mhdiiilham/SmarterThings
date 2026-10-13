@@ -11,7 +11,7 @@ public struct FileTokenStore: TokenStore {
     }
 
     public static var defaultDirectory: URL {
-        URL.applicationSupportDirectory.appending(path: "TVRemote")
+        URL.applicationSupportDirectory.appending(path: "SmarterThings")
     }
 
     public func token() -> String? {

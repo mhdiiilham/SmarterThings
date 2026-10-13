@@ -68,14 +68,14 @@ final class TypingViewModel {
         switch error {
         case LocalTVError.tvNotFound:
             .failed(
-                "Couldn't reach the TV on this network. Check Local Network access for TV Remote "
+                "Couldn't reach the TV on this network. Check Local Network access for SmarterThings "
                     + "in System Settings › Privacy & Security, or enter the TV's IP address.",
                 canEnterAddress: true
             )
         case LocalTVError.accessDenied:
             .failed(
                 "The TV blocked this Mac. On the TV, open Settings › General › External Device Manager "
-                    + "› Device Connection Manager and allow \"TV Remote (Mac)\".",
+                    + "› Device Connection Manager and allow \"SmarterThings (Mac)\".",
                 canEnterAddress: false
             )
         case LocalTVError.noResponse:

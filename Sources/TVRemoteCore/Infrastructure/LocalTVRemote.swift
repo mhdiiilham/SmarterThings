@@ -13,7 +13,7 @@ public actor LocalTVRemote: TVKeyboard {
     public init(
         hostFinder: TVHostFinder,
         tokenStore: TokenStore,
-        appName: String = "TV Remote (Mac)",
+        appName: String = "SmarterThings (Mac)",
         approvalTimeout: Duration = .seconds(30)
     ) {
         self.hostFinder = hostFinder

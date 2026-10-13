@@ -33,7 +33,7 @@ struct TVRemoteApp: App {
     }
 
     var body: some Scene {
-        MenuBarExtra("TV Remote", systemImage: "tv") {
+        MenuBarExtra("SmarterThings", systemImage: "tv") {
             RemoteView(model: model, typing: typing, shortcuts: shortcuts, localTVs: localTVs)
         }
         .menuBarExtraStyle(.window)

@@ -1,4 +1,4 @@
-# TV Remote
+# SmarterThings
 
 A macOS menu bar remote for Samsung smart TVs. Click the TV icon in the menu bar to get a remote with a D-pad, volume and channel rockers, media keys, input sources, favorite app shortcuts and a field for typing into the TV's search boxes.
 
@@ -11,16 +11,28 @@ A macOS menu bar remote for Samsung smart TVs. Click the TV icon in the menu bar
 - A Samsung TV from 2016 or later (Tizen), added to your SmartThings account
 - For typing and app shortcuts: the Mac and the TV on the same network
 
-## Quick start
+## Install
+
+1. Download `SmarterThings-<version>.dmg`, open it, and drag **SmarterThings** onto **Applications**.
+2. Open SmarterThings from Applications. It appears as a TV icon in the menu bar, with no Dock icon.
+
+The app is ad-hoc signed, not notarized by Apple, so the first launch on another Mac shows *"Apple could not verify SmarterThings…"*. To open it anyway, go to **System Settings › Privacy & Security** and click **Open Anyway** next to SmarterThings, or run:
+
+```sh
+xattr -dr com.apple.quarantine /Applications/SmarterThings.app
+```
+
+## Build from source
 
 ```sh
 make run     # debug build, restart the app
 make stop    # quit the app (or click Quit in the remote's footer)
-make app     # optimized build → TVRemote.app (then: open TVRemote.app)
+make app     # optimized universal build → SmarterThings.app
+make dmg     # → build/SmarterThings-<version>.dmg (+ .sha256)
 make test    # run the tests
 ```
 
-`make run` and `make app` produce `TVRemote.app`, which runs as a menu bar app with no Dock icon. To keep it, copy `TVRemote.app` into `/Applications`.
+Set the version with `make dmg VERSION=1.1.0`. Release builds are universal (Apple Silicon and Intel).
 
 ## How to use
 
@@ -54,8 +66,8 @@ The field at the bottom does two things:
 Use 🔍 for YouTube: its search box uses YouTube's own keyboard, which ignores typed text.
 
 The first time you press Return, two prompts appear:
-1. **macOS** asks to allow TV Remote to access the local network. Click Allow.
-2. **The TV** asks whether to allow "TV Remote (Mac)". Accept it with the physical remote.
+1. **macOS** asks to allow SmarterThings to access the local network. Click Allow.
+2. **The TV** asks whether to allow "SmarterThings (Mac)". Accept it with the physical remote.
 
 The app finds the TV on your network automatically. If you have several Samsung TVs, pick one from the Wi-Fi menu in the footer. Your choice is remembered by the TV's own ID, not its IP, so it keeps working when the router gives the TV a new address. If no TV can be found, the error message under the field has a box for the TV's IP address as a fallback. On the TV it's under Settings › General › Network › Network Status › IP Settings.
 
@@ -113,16 +125,17 @@ Sources/TVRemoteCore/
                     TVHostFinder, FileTokenStore
 Sources/TVRemoteApp/  SwiftUI MenuBarExtra: views, view models, PopularApps (known app IDs)
 Tests/TVRemoteCoreTests/  Swift Testing, using fake HTTP transport and token stores
-scripts/bundle.sh     builds TVRemote.app (Info.plist, ad-hoc signature)
+scripts/bundle.sh     builds SmarterThings.app (Info.plist, ad-hoc signature)
+scripts/dmg.sh        packages it into a drag-to-Applications DMG
 ```
 
 ### Where data is stored
 
 | What | Where |
 |---|---|
-| SmartThings token | `~/Library/Application Support/TVRemote/smartthings-token` |
-| TV pairing token | `~/Library/Application Support/TVRemote/local-tv-token` |
-| Chosen local TV (by ID), manually entered TV IP, favorite apps | app defaults (`com.mo.TVRemote`) |
+| SmartThings token | `~/Library/Application Support/SmarterThings/smartthings-token` |
+| TV pairing token | `~/Library/Application Support/SmarterThings/local-tv-token` |
+| Chosen local TV (by ID), manually entered TV IP, favorite apps | app defaults (`com.mhdiiilham.SmarterThings`) |
 
 The token folder is readable only by your user account (0700, with files 0600). Tokens aren't kept in the Keychain because the app is ad-hoc signed: the Keychain treats every rebuild as a new app and asks for your password again.
 
@@ -138,7 +151,7 @@ The token folder is readable only by your user account (0700, with files 0600). 
 - **One TV pairing at a time.** Only one local TV token is stored, so switching between TVs makes the new TV ask "Allow" again.
 - **Some features need the same network.** Typing, finding the TV and checking installed apps need it. Buttons, shortcuts and 🔍 search work anywhere.
 - **Older TVs aren't supported.** Models from 2014–2015 use an older PIN-based pairing protocol.
-- **It isn't notarized.** The app is ad-hoc signed for local use. Sharing a built copy would trigger Gatekeeper warnings on other Macs.
+- **It isn't notarized.** The app is ad-hoc signed, so other Macs show a Gatekeeper warning on first launch (see Install). Fixing that needs an Apple Developer ID ($99/year) and notarization.
 - **SwiftUI `@State` isn't used.** In the macOS 27 SDK, `@State` is a macro whose plugin ships only with Xcode. The views use the `State` type directly so the app builds with Command Line Tools alone.
 
 ## Status

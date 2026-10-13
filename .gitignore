@@ -1,5 +1,6 @@
 .build/
 .swiftpm/
 *.apk
-TVRemote.app/
+SmarterThings.app/
+build/
 .DS_Store
