@@ -15,6 +15,7 @@ A macOS menu bar remote for Samsung smart TVs. Click the TV icon in the menu bar
 
 ```sh
 make run     # debug build, restart the app
+make stop    # quit the app (or click Quit in the remote's footer)
 make app     # optimized build → TVRemote.app (then: open TVRemote.app)
 make test    # run the tests
 ```
@@ -51,7 +52,7 @@ The first time, two prompts appear:
 1. **macOS** asks to allow TV Remote to access the local network. Click Allow.
 2. **The TV** asks whether to allow "TV Remote (Mac)". Accept it with the physical remote.
 
-If the TV can't be found automatically, the error message under the field has a box for the TV's IP address. On the TV it's under Settings › General › Network › Network Status › IP Settings.
+The app finds the TV on your network automatically. If you have several Samsung TVs, pick one from the Wi-Fi menu in the footer. Your choice is remembered by the TV's own ID, not its IP, so it keeps working when the router gives the TV a new address. If no TV can be found, the error message under the field has a box for the TV's IP address as a fallback. On the TV it's under Settings › General › Network › Network Status › IP Settings.
 
 ### 4. App shortcuts
 
@@ -88,6 +89,7 @@ The app reaches the TV in two ways, because neither one can do everything:
 1. **Discovery.** SSDP `M-SEARCH` for `urn:samsung.com:device:RemoteControlReceiver:1` (older TVs) and `urn:dial-multiscreen-org:service:dial:1` (newer TVs, e.g. 2025 models), keeping only replies whose `SERVER` header says Samsung. A manually entered IP is used only when discovery finds nothing, so a TV that gets a new IP from the router is found again automatically.
 2. **Connect.** A WebSocket to port 8002, with the app name base64-encoded in `name` and the saved pairing token in `token`. The TV replies `ms.channel.connect`; the first time, that reply includes the new token. The TV uses a self-signed certificate, which the app trusts only for the TV's own address.
 3. **Typing.** `ms.remote.control` with `TypeOfRemote: "SendInputString"` and base64 text, then `SendInputEnd` to apply it.
+   Each reply's address is then asked for `http://<host>:8001/api/v2/`, which gives the TV's name and its stable `uuid:` ID; only `type: "Samsung SmartTV"` is kept. The TV chosen in the footer menu is matched by that ID.
 4. **Apps.** `ms.channel.emit` with `ed.installedApp.get` lists the apps. `ed.apps.launch` opens one, using `DEEP_LINK` for web apps (`app_type` 2) and `NATIVE_LAUNCH` for the others.
 
 The TV drops idle connections, so a failed send reconnects once and retries.
@@ -113,7 +115,7 @@ scripts/bundle.sh     builds TVRemote.app (Info.plist, ad-hoc signature)
 |---|---|
 | SmartThings token | `~/Library/Application Support/TVRemote/smartthings-token` |
 | TV pairing token | `~/Library/Application Support/TVRemote/local-tv-token` |
-| Manually entered TV IP, favorite apps | app defaults (`com.mo.TVRemote`) |
+| Chosen local TV (by ID), manually entered TV IP, favorite apps | app defaults (`com.mo.TVRemote`) |
 
 The token folder is readable only by your user account (0700, with files 0600). Tokens aren't kept in the Keychain because the app is ad-hoc signed: the Keychain treats every rebuild as a new app and asks for your password again.
 
@@ -125,6 +127,7 @@ The token folder is readable only by your user account (0700, with files 0600). 
 - **Typing is sent on Return, and only into Samsung's keyboard.** Apps that draw their own on-screen keyboard (possibly YouTube) may ignore the text.
 - **Some TVs don't list apps.** Some newer Samsung firmware doesn't answer `ed.installedApp.get`. Shortcuts then show "The TV didn't answer".
 - **App tiles show letters, not icons.** Tiles are colored letters; the TV's icons aren't downloaded.
+- **One TV pairing at a time.** Only one local TV token is stored, so switching between TVs makes the new TV ask "Allow" again.
 - **The local features need the same network.** Typing and shortcuts don't work away from home, though the cloud buttons do.
 - **Older TVs aren't supported.** Models from 2014–2015 use an older PIN-based pairing protocol.
 - **It isn't notarized.** The app is ad-hoc signed for local use. Sharing a built copy would trigger Gatekeeper warnings on other Macs.

@@ -5,6 +5,7 @@ struct RemoteView: View {
     let model: RemoteViewModel
     let typing: TypingViewModel
     let shortcuts: AppShortcutsViewModel
+    let localTVs: LocalTVPickerViewModel
 
     var body: some View {
         VStack(spacing: 0) {
@@ -19,6 +20,7 @@ struct RemoteView: View {
         }
         .frame(width: 252)
         .task { await model.load() }
+        .task { await localTVs.searchIfNeeded() }
     }
 
     @ViewBuilder
@@ -149,6 +151,7 @@ struct RemoteView: View {
             if model.status == .ready {
                 FooterButton(symbol: "arrow.clockwise", help: "Refresh TVs") { Task { await model.load() } }
                 FooterButton(symbol: "key", help: "Change token") { model.changeToken() }
+                LocalTVMenu(model: localTVs)
             }
             Spacer()
             Button("Quit") { NSApplication.shared.terminate(nil) }
@@ -156,6 +159,41 @@ struct RemoteView: View {
                 .font(.system(size: 11))
                 .foregroundStyle(.secondary)
         }
+    }
+}
+
+/// Which TV on this network typing and shortcuts talk to. Remembered by the TV's ID, not its IP.
+private struct LocalTVMenu: View {
+    let model: LocalTVPickerViewModel
+
+    var body: some View {
+        Menu {
+            Section("TV on this network") {
+                if model.isSearching {
+                    Text("Searching…")
+                } else if model.devices.isEmpty {
+                    Text("No Samsung TV found")
+                }
+                ForEach(model.devices) { device in
+                    Button { model.choose(device) } label: {
+                        if device == model.activeDevice {
+                            Label("\(device.name)  ·  \(device.host)", systemImage: "checkmark")
+                        } else {
+                            Text("\(device.name)  ·  \(device.host)")
+                        }
+                    }
+                }
+            }
+            Divider()
+            Button("Search Again") { Task { await model.search() } }
+        } label: {
+            Image(systemName: "wifi")
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .foregroundStyle(.secondary)
+        .help(model.activeDevice.map { "Local TV: \($0.name)" } ?? "Choose the TV on this network")
     }
 }
 

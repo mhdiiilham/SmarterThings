@@ -46,6 +46,12 @@ public actor LocalTVRemote: TVKeyboard, TVAppLauncher {
         }
     }
 
+    /// Closes the connection, e.g. after switching to another TV.
+    public func disconnect() {
+        socket?.cancel(with: .goingAway, reason: nil)
+        socket = nil
+    }
+
     /// Runs `operation` on the open connection. The TV drops idle connections,
     /// so a transport failure gets one retry on a fresh connection.
     private func withSocket<Result: Sendable>(
