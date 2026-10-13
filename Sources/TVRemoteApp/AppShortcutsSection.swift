@@ -65,15 +65,18 @@ struct AppShortcutsSection: View {
                 .font(.system(size: 10))
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
-            VStack(spacing: 2) {
-                ForEach(model.availableApps) { app in
-                    AppPickerRow(
-                        app: app,
-                        isFavorite: model.isFavorite(app),
-                        isEnabled: model.isFavorite(app) || model.canAddFavorite
-                    ) { model.toggleFavorite(app) }
+            ScrollView {
+                VStack(spacing: 2) {
+                    ForEach(model.availableApps) { app in
+                        AppPickerRow(
+                            app: app,
+                            isFavorite: model.isFavorite(app),
+                            isEnabled: model.isFavorite(app) || model.canAddFavorite
+                        ) { model.toggleFavorite(app) }
+                    }
                 }
             }
+            .frame(maxHeight: 150)
         }
     }
 }
@@ -89,7 +92,8 @@ private struct AppTile: View {
                 Text(app.name)
                     .font(.system(size: 10, weight: .medium))
                     .lineLimit(1)
-                    .frame(width: 54)
+                    .minimumScaleFactor(0.75)
+                    .frame(width: 56)
             }
         }
         .buttonStyle(PressableStyle(shape: RoundedRectangle(cornerRadius: 10), fill: Color.clear))

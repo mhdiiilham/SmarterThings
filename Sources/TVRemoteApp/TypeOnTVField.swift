@@ -15,7 +15,7 @@ struct TypeOnTVField: View {
                 Image(systemName: "keyboard")
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(.secondary)
-                TextField("Type or search on TV…", text: textState.projectedValue)
+                TextField("Type or search…", text: textState.projectedValue)
                     .textFieldStyle(.plain)
                     .font(.system(size: 12))
                     .onSubmit(send)
@@ -50,12 +50,12 @@ struct TypeOnTVField: View {
         switch model.status {
         case .idle:
             caption(canSearch
-                ? "Return types into the TV's open keyboard. 🔍 runs a TV search."
+                ? "Return types into the TV's keyboard. The magnifier searches the TV."
                 : "Open a search box on the TV, then type here.", style: .secondary)
         case .sending:
             caption("Sending… The first time, choose Allow on the TV.", style: .secondary)
         case .sent:
-            caption("Sent to TV. YouTube ignores this; use 🔍 there.", style: .green)
+            caption("Sent. YouTube and Netflix ignore typing; use the magnifier.", style: .green)
         case .searched:
             caption("Search sent to TV.", style: .green)
         case .failed(let message, let canEnterAddress):

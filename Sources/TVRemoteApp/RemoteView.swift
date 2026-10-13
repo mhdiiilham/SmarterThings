@@ -18,7 +18,7 @@ struct RemoteView: View {
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
         }
-        .frame(width: 252)
+        .frame(width: model.status == .ready ? 724 : 300)
         .task { await model.load() }
         .task { await localTVs.searchIfNeeded() }
     }
@@ -37,47 +37,58 @@ struct RemoteView: View {
         }
     }
 
+    /// Wide layout: navigation | volume & media | shortcuts & typing, so it fits on a laptop screen.
     private var remote: some View {
-        VStack(spacing: 18) {
-            buttons
-            if model.canLaunchApps {
-                AppShortcutsSection(model: shortcuts, onLaunch: model.launch)
+        VStack(spacing: 16) {
+            header
+            HStack(alignment: .top, spacing: 0) {
+                buttons
+                Divider().padding(.horizontal, 18)
+                VStack(alignment: .leading, spacing: 16) {
+                    if model.canLaunchApps {
+                        AppShortcutsSection(model: shortcuts, onLaunch: model.launch)
+                    }
+                    TypeOnTVField(model: typing, canSearch: model.canSearch)
+                }
+                .frame(width: 236)
             }
-            TypeOnTVField(model: typing, canSearch: model.canSearch)
         }
     }
 
     /// Arrow/Return/Esc shortcuts live here, not on the text field, so typing isn't hijacked.
     private var buttons: some View {
-        VStack(spacing: 18) {
-            header
-            DirectionPad(onPress: model.press)
-                .disabled(!model.supports(.ok))
-            HStack(spacing: 22) {
-                LabeledIconButton(symbol: "arrow.uturn.backward", title: "Back") { model.press(.back) }
-                LabeledIconButton(symbol: "house.fill", title: "Home") { model.press(.home) }
-                LabeledIconButton(symbol: "line.3.horizontal", title: "Menu") { model.press(.menu) }
+        HStack(alignment: .top, spacing: 26) {
+            VStack(spacing: 16) {
+                DirectionPad(onPress: model.press)
+                    .disabled(!model.supports(.ok))
+                HStack(spacing: 14) {
+                    LabeledIconButton(symbol: "arrow.uturn.backward", title: "Back") { model.press(.back) }
+                    LabeledIconButton(symbol: "house.fill", title: "Home") { model.press(.home) }
+                    LabeledIconButton(symbol: "line.3.horizontal", title: "Menu") { model.press(.menu) }
+                }
+                .disabled(!model.supports(.home))
             }
-            .disabled(!model.supports(.home))
-            HStack {
-                Rocker(title: "VOL", upKey: .volumeUp, downKey: .volumeDown, onPress: model.press)
-                    .disabled(!model.supports(.volumeUp))
-                Spacer()
-                LabeledIconButton(
-                    symbol: model.isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill",
-                    title: model.isMuted ? "Unmute" : "Mute",
-                    size: 50,
-                    action: model.toggleMute
-                )
-                .disabled(!model.supports(.mute))
-                Spacer()
-                Rocker(title: "CH", upKey: .channelUp, downKey: .channelDown, onPress: model.press)
-                    .disabled(!model.supports(.channelUp))
+            VStack(spacing: 18) {
+                HStack(spacing: 16) {
+                    Rocker(title: "VOL", upKey: .volumeUp, downKey: .volumeDown, onPress: model.press)
+                        .disabled(!model.supports(.volumeUp))
+                    LabeledIconButton(
+                        symbol: model.isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill",
+                        title: model.isMuted ? "Unmute" : "Mute",
+                        size: 50,
+                        action: model.toggleMute
+                    )
+                    .disabled(!model.supports(.mute))
+                    Rocker(title: "CH", upKey: .channelUp, downKey: .channelDown, onPress: model.press)
+                        .disabled(!model.supports(.channelUp))
+                }
+                MediaBar(onPress: model.press)
+                    .frame(width: 200)
+                    .disabled(!model.supports(.play))
             }
-            .padding(.horizontal, 6)
-            MediaBar(onPress: model.press)
-                .disabled(!model.supports(.play))
+            .padding(.top, 6)
         }
+        .fixedSize()
         .focusable()
         .focusEffectDisabled()
         .onKeyPress(.upArrow) { model.press(.up); return .handled }
@@ -122,12 +133,11 @@ struct RemoteView: View {
                 }
             }
         } label: {
-            Image(systemName: "rectangle.portrait.and.arrow.right")
+            Text("Source").font(.system(size: 12))
         }
         .menuStyle(.borderlessButton)
-        .menuIndicator(.hidden)
         .fixedSize()
-        .help("Source")
+        .help("Switch input (HDMI, TV…)")
     }
 
     private var powerButton: some View {

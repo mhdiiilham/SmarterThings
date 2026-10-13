@@ -146,6 +146,7 @@ struct LabeledIconButton: View {
             Text(title)
                 .font(.system(size: 10, weight: .medium))
                 .foregroundStyle(.secondary)
+                .fixedSize()
         }
     }
 }
