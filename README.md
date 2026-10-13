@@ -1,4 +1,8 @@
-# SmarterThings
+<p align="center">
+  <img src="Resources/AppIcon.png" alt="SmarterThings app icon" width="128">
+</p>
+
+<h1 align="center">SmarterThings</h1>
 
 <p align="center">
   <img src="image.png" alt="SmarterThings remote in the macOS menu bar" width="742">
@@ -38,6 +42,7 @@ make run     # debug build, restart the app
 make stop    # quit the app (or click Quit in the remote's footer)
 make app     # optimized universal build → SmarterThings.app
 make dmg     # → build/SmarterThings-<version>.dmg (+ .sha256)
+make icon    # re-render Resources/AppIcon.icns from scripts/make-icon.swift
 make test    # run the tests
 ```
 
@@ -142,6 +147,7 @@ Sources/SmarterThings/  SwiftUI MenuBarExtra: views, view models, PopularApps (k
 Tests/SmarterThingsCoreTests/  Swift Testing, using fake HTTP transport and token stores
 scripts/bundle.sh     builds SmarterThings.app (Info.plist, ad-hoc signature)
 scripts/dmg.sh        packages it into a drag-to-Applications DMG
+scripts/make-icon.*   draws the app icon in SwiftUI → Resources/AppIcon.icns
 ```
 
 ### Where data is stored

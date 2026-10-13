@@ -1,4 +1,4 @@
-.PHONY: run stop app dmg test
+.PHONY: run stop app dmg icon test
 
 VERSION ?= 1.0.0
 export VERSION
@@ -21,6 +21,10 @@ app:
 # Drag-to-Applications disk image: build/SmarterThings-$(VERSION).dmg
 dmg:
 	./scripts/dmg.sh
+
+# Re-render Resources/AppIcon.icns after changing scripts/make-icon.swift.
+icon:
+	./scripts/make-icon.sh
 
 test:
 	swift test

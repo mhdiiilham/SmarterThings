@@ -18,8 +18,9 @@ swift build -c "$configuration" ${arch_flags[@]+"${arch_flags[@]}"} --product Sm
 binary="$(swift build -c "$configuration" ${arch_flags[@]+"${arch_flags[@]}"} --show-bin-path)/SmarterThings"
 
 rm -rf "$app"
-mkdir -p "$app/Contents/MacOS"
+mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
 cp "$binary" "$app/Contents/MacOS/SmarterThings"
+cp Resources/AppIcon.icns "$app/Contents/Resources/AppIcon.icns"
 
 cat > "$app/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -27,6 +28,7 @@ cat > "$app/Contents/Info.plist" <<PLIST
 <plist version="1.0">
 <dict>
     <key>CFBundleExecutable</key><string>SmarterThings</string>
+    <key>CFBundleIconFile</key><string>AppIcon</string>
     <key>CFBundleIdentifier</key><string>com.mhdiiilham.SmarterThings</string>
     <key>CFBundleName</key><string>SmarterThings</string>
     <key>CFBundleDisplayName</key><string>SmarterThings</string>
