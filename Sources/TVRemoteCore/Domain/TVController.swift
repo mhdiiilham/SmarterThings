@@ -1,0 +1,12 @@
+/// Port to whatever service actually reaches the TV.
+public protocol TVController: Sendable {
+    func televisions() async throws -> [TV]
+    func inputSources(of tv: TV) async throws -> [InputSource]
+    func send(_ command: TVCommand, to tv: TV) async throws
+}
+
+public enum RemoteError: Error, Equatable {
+    case missingToken
+    case tokenExpired
+    case requestFailed(status: Int)
+}
