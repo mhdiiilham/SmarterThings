@@ -183,6 +183,10 @@ The folder is readable only by your user account (0700, with files 0600). The to
 
 The protocol messages and power decisions are covered by unit tests (`make test`).
 
+## Contributing
+
+Bug reports, TV compatibility reports and pull requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) and the [Code of Conduct](CODE_OF_CONDUCT.md). Please report security issues privately as described in [SECURITY.md](SECURITY.md).
+
 ## License
 
 [MIT](LICENSE) © 2026 Muhammad Ilham

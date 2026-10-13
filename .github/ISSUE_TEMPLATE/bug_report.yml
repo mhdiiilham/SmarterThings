@@ -1,0 +1,54 @@
+name: Bug report
+description: Something doesn't work as expected
+labels: [bug]
+body:
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What you did, what you expected, and what happened instead. Include any notice the app showed.
+    validations:
+      required: true
+  - type: input
+    id: tv-model
+    attributes:
+      label: TV model
+      description: From the TV's Settings › Support › About This TV, e.g. UA50UE100FKXXD
+    validations:
+      required: true
+  - type: input
+    id: macos
+    attributes:
+      label: macOS version
+      placeholder: e.g. macOS 27.0
+    validations:
+      required: true
+  - type: input
+    id: app-version
+    attributes:
+      label: SmarterThings version
+      placeholder: e.g. 0.1.0
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Remote buttons
+        - Power
+        - Bluetooth keyboard
+        - Typing into Samsung's keyboard
+        - App shortcuts
+        - Finding the TV / connecting
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: |
+        After reproducing, run:
+        `log show --last 10m --info --predicate 'subsystem == "com.mhdiiilham.SmarterThings"'`
+      render: text
