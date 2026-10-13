@@ -1,5 +1,5 @@
 import Testing
-@testable import TVRemoteCore
+@testable import SmarterThingsCore
 
 struct SSDPDiscoveryTests {
     @Test func acceptsSamsungTVReply() {

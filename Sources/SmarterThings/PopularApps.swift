@@ -1,4 +1,4 @@
-import TVRemoteCore
+import SmarterThingsCore
 
 /// Known Tizen app IDs offered for shortcuts. SmartThings can't list installed apps, so the
 /// picker checks these against the TV and shows only the installed ones (with the TV's names).

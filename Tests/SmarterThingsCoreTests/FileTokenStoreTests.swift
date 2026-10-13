@@ -1,9 +1,9 @@
 import Foundation
 import Testing
-@testable import TVRemoteCore
+@testable import SmarterThingsCore
 
 struct FileTokenStoreTests {
-    private let directory = FileManager.default.temporaryDirectory.appending(path: "TVRemoteTests-\(UUID())")
+    private let directory = FileManager.default.temporaryDirectory.appending(path: "SmarterThingsTests-\(UUID())")
     private var store: FileTokenStore { FileTokenStore(name: "token", directory: directory) }
 
     @Test func missingFileMeansNoToken() {

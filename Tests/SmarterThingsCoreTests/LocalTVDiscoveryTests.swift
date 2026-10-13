@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import TVRemoteCore
+@testable import SmarterThingsCore
 
 struct LocalTVDiscoveryTests {
     @Test func parsesTVInfoAndUnescapesName() {

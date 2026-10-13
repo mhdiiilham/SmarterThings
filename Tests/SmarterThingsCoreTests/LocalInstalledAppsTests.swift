@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import TVRemoteCore
+@testable import SmarterThingsCore
 
 struct LocalInstalledAppsTests {
     private let youTube = TVApp(id: "111299001912", name: "YouTube")

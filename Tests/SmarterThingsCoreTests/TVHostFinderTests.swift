@@ -1,5 +1,5 @@
 import Testing
-@testable import TVRemoteCore
+@testable import SmarterThingsCore
 
 struct TVHostFinderTests {
     private let livingRoom = LocalTVDevice(id: "uuid:living", name: "Living Room", host: "10.0.0.9")

@@ -1,6 +1,6 @@
 import Foundation
 import Observation
-import TVRemoteCore
+import SmarterThingsCore
 
 @MainActor
 @Observable
@@ -51,7 +51,7 @@ final class RemoteViewModel {
             try tokenStore.save(trimmedToken)
             await load()
         } catch {
-            status = .failed("Couldn't save the token to ~/Library/Application Support/TVRemote.")
+            status = .failed("Couldn't save the token to ~/Library/Application Support/SmarterThings.")
         }
     }
 

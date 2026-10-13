@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import TVRemoteCore
+@testable import SmarterThingsCore
 
 struct SmartThingsClientTests {
     private let tv = TV(id: "tv-1", name: "Living Room", capabilities: ["samsungvd.mediaInputSource"])

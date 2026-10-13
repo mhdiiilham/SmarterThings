@@ -1,8 +1,8 @@
 import SwiftUI
-import TVRemoteCore
+import SmarterThingsCore
 
 @main
-struct TVRemoteApp: App {
+struct SmarterThingsApp: App {
     private let model: RemoteViewModel
     private let typing: TypingViewModel
     private let shortcuts: AppShortcutsViewModel

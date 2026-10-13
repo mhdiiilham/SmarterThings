@@ -2,11 +2,11 @@
 import PackageDescription
 
 let package = Package(
-    name: "TVRemote",
+    name: "SmarterThings",
     platforms: [.macOS(.v14)],
     targets: [
-        .target(name: "TVRemoteCore"),
-        .executableTarget(name: "TVRemoteApp", dependencies: ["TVRemoteCore"]),
-        .testTarget(name: "TVRemoteCoreTests", dependencies: ["TVRemoteCore"]),
+        .target(name: "SmarterThingsCore"),
+        .executableTarget(name: "SmarterThings", dependencies: ["SmarterThingsCore"]),
+        .testTarget(name: "SmarterThingsCoreTests", dependencies: ["SmarterThingsCore"]),
     ]
 )

@@ -14,8 +14,8 @@ if [ "$configuration" = "release" ]; then
     arch_flags=(--arch arm64 --arch x86_64)
 fi
 
-swift build -c "$configuration" ${arch_flags[@]+"${arch_flags[@]}"} --product TVRemoteApp
-binary="$(swift build -c "$configuration" ${arch_flags[@]+"${arch_flags[@]}"} --show-bin-path)/TVRemoteApp"
+swift build -c "$configuration" ${arch_flags[@]+"${arch_flags[@]}"} --product SmarterThings
+binary="$(swift build -c "$configuration" ${arch_flags[@]+"${arch_flags[@]}"} --show-bin-path)/SmarterThings"
 
 rm -rf "$app"
 mkdir -p "$app/Contents/MacOS"

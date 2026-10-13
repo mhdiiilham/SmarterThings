@@ -1,6 +1,6 @@
 import Foundation
 import Observation
-import TVRemoteCore
+import SmarterThingsCore
 
 /// Which apps are pinned as shortcuts. Opening them goes through RemoteViewModel (SmartThings);
 /// the picker narrows the known apps to the ones installed on the TV when it can reach it.

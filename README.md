@@ -128,14 +128,14 @@ The command shapes come from SmartThings' capability definitions (`GET /capabili
 Clean architecture: the UI depends on the core, and the core's domain doesn't depend on any network or storage code.
 
 ```
-Sources/TVRemoteCore/
+Sources/SmarterThingsCore/
   Domain/           RemoteKey, TV, TVApp, TVCommand, LocalTVDevice, and the ports
                     TVController, TVKeyboard, InstalledAppFinder, TokenStore
   Infrastructure/   SmartThingsClient (cloud), LocalTVRemote + LocalRemoteProtocol
                     (typing), LocalInstalledApps, SSDPDiscovery, LocalTVDiscovery,
                     TVHostFinder, FileTokenStore
-Sources/TVRemoteApp/  SwiftUI MenuBarExtra: views, view models, PopularApps (known app IDs)
-Tests/TVRemoteCoreTests/  Swift Testing, using fake HTTP transport and token stores
+Sources/SmarterThings/  SwiftUI MenuBarExtra: views, view models, PopularApps (known app IDs)
+Tests/SmarterThingsCoreTests/  Swift Testing, using fake HTTP transport and token stores
 scripts/bundle.sh     builds SmarterThings.app (Info.plist, ad-hoc signature)
 scripts/dmg.sh        packages it into a drag-to-Applications DMG
 ```
@@ -156,7 +156,7 @@ The token folder is readable only by your user account (0700, with files 0600). 
 - **Power on depends on the TV.** Turning the TV on from the cloud only works if network standby is enabled on the TV. Turning it off always works.
 - **Power and mute state can drift.** Power is re-read each time you open the remote. Mute state is only tracked locally, so it can get out of sync if you use the physical remote.
 - **Typing only reaches Samsung's keyboard.** YouTube draws its own keyboard and ignores typed text; use 🔍 search there. Text is sent on Return, not as you type.
-- **Shortcuts only know listed apps.** The picker checks the app IDs in `PopularApps.swift` against the TV, so an installed app missing from that list won't appear. Add its Tizen app ID to the list to include it.
+- **Shortcuts only know listed apps.** The picker checks the app IDs in `Sources/SmarterThings/PopularApps.swift` against the TV, so an installed app missing from that list won't appear. Add its Tizen app ID to the list to include it.
 - **TV search shows Samsung's results page.** 🔍 runs the TV's universal search; it doesn't open a specific app's search directly.
 - **App tiles show letters, not icons.** Tiles are colored letters; the TV's icons aren't downloaded.
 - **One TV pairing at a time.** Only one local TV token is stored, so switching between TVs makes the new TV ask "Allow" again.

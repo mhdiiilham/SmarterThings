@@ -1,5 +1,5 @@
 import SwiftUI
-import TVRemoteCore
+import SmarterThingsCore
 
 struct RemoteView: View {
     let model: RemoteViewModel

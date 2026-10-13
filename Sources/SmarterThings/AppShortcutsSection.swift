@@ -1,5 +1,5 @@
 import SwiftUI
-import TVRemoteCore
+import SmarterThingsCore
 
 /// Up to four favorite TV apps; the pencil switches to picking them from the popular-app list.
 struct AppShortcutsSection: View {

@@ -1,5 +1,5 @@
 import Testing
-@testable import TVRemoteCore
+@testable import SmarterThingsCore
 
 struct RemoteKeyCommandTests {
     @Test(arguments: [
