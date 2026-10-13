@@ -24,9 +24,13 @@ public struct SmartThingsClient: TVController {
 
     public func inputSources(of tv: TV) async throws -> [InputSource] {
         guard let capability = tv.inputSourceCapability else { return [] }
-        let path = "devices/\(tv.id)/components/main/capabilities/\(capability)/status"
-        let data = try await perform(request(path: path))
+        let data = try await perform(request(path: statusPath(of: tv, capability: capability)))
         return try JSONDecoder().decode(InputSourceStatus.self, from: data).sources
+    }
+
+    public func isPoweredOn(_ tv: TV) async throws -> Bool {
+        let data = try await perform(request(path: statusPath(of: tv, capability: "switch")))
+        return try JSONDecoder().decode(SwitchStatus.self, from: data).switch.value == "on"
     }
 
     public func send(_ command: TVCommand, to tv: TV) async throws {
@@ -35,6 +39,10 @@ public struct SmartThingsClient: TVController {
         commandRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
         commandRequest.httpBody = try JSONEncoder().encode(CommandBatch(command))
         _ = try await perform(commandRequest)
+    }
+
+    private func statusPath(of tv: TV, capability: String) -> String {
+        "devices/\(tv.id)/components/main/capabilities/\(capability)/status"
     }
 
     private func request(path: String) throws -> URLRequest {
@@ -105,6 +113,14 @@ private struct InputSourceStatus: Decodable {
             return named.map { InputSource(id: $0.id, name: $0.name) }
         }
         return (supportedInputSources?.value ?? []).map { InputSource(id: $0, name: $0) }
+    }
+}
+
+private struct SwitchStatus: Decodable {
+    let `switch`: Value
+
+    struct Value: Decodable {
+        let value: String?
     }
 }
 

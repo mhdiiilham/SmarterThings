@@ -2,6 +2,7 @@
 public protocol TVController: Sendable {
     func televisions() async throws -> [TV]
     func inputSources(of tv: TV) async throws -> [InputSource]
+    func isPoweredOn(_ tv: TV) async throws -> Bool
     func send(_ command: TVCommand, to tv: TV) async throws
 }
 

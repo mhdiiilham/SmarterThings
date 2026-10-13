@@ -47,6 +47,15 @@ struct SmartThingsClientTests {
         #expect(sources.map(\.id) == ["digitalTv", "HDMI1"])
     }
 
+    @Test(arguments: [("on", true), ("off", false)])
+    func powerStateComesFromSwitchStatus(value: String, expected: Bool) async throws {
+        let transport = FakeTransport(responses: [(200, #"{"switch": {"value": "\#(value)"}}"#)])
+        let isOn = try await makeClient(transport).isPoweredOn(tv)
+
+        #expect(isOn == expected)
+        #expect(transport.requests.first?.url?.path == "/v1/devices/tv-1/components/main/capabilities/switch/status")
+    }
+
     @Test func unauthorizedMeansTokenExpired() async {
         let client = makeClient(FakeTransport(responses: [(401, "")]))
         await #expect(throws: RemoteError.tokenExpired) { try await client.televisions() }

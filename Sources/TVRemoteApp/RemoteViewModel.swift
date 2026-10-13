@@ -16,9 +16,9 @@ final class RemoteViewModel {
     private(set) var televisions: [TV] = []
     private(set) var inputSources: [InputSource] = []
     private(set) var isMuted = false
-    var selectedTV: TV? {
-        didSet { if oldValue != selectedTV { Task { await loadInputSources() } } }
-    }
+    /// `nil` until SmartThings reports the TV's switch state.
+    private(set) var isPoweredOn: Bool?
+    private(set) var selectedTV: TV?
 
     private let controller: TVController
     private let tokenStore: TokenStore
@@ -38,6 +38,7 @@ final class RemoteViewModel {
             televisions = try await controller.televisions()
             selectedTV = televisions.first { $0.id == selectedTV?.id } ?? televisions.first
             status = televisions.isEmpty ? .failed("No Samsung TV found in your SmartThings account.") : .ready
+            await loadSelectedTVState()
         } catch {
             show(error)
         }
@@ -54,12 +55,25 @@ final class RemoteViewModel {
         }
     }
 
+    func select(_ tv: TV?) {
+        guard tv != selectedTV else { return }
+        selectedTV = tv
+        Task { await loadSelectedTVState() }
+    }
+
     func changeToken() {
         status = .needsToken(reason: nil)
     }
 
     func press(_ key: RemoteKey) {
         send(key.command)
+    }
+
+    /// When the state is unknown, turn on: harmless if the TV is already on.
+    func togglePower() {
+        let isTurningOff = isPoweredOn == true
+        isPoweredOn = !isTurningOff
+        press(isTurningOff ? .powerOff : .powerOn)
     }
 
     func toggleMute() {
@@ -87,12 +101,16 @@ final class RemoteViewModel {
         }
     }
 
-    private func loadInputSources() async {
+    private func loadSelectedTVState() async {
         guard let tv = selectedTV else {
             inputSources = []
+            isPoweredOn = nil
             return
         }
-        inputSources = (try? await controller.inputSources(of: tv)) ?? []
+        async let sources = try? controller.inputSources(of: tv)
+        async let poweredOn = try? controller.isPoweredOn(tv)
+        inputSources = await sources ?? []
+        isPoweredOn = await poweredOn
     }
 
     private func show(_ error: Error) {

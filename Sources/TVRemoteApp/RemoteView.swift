@@ -2,7 +2,7 @@ import SwiftUI
 import TVRemoteCore
 
 struct RemoteView: View {
-    @Bindable var model: RemoteViewModel
+    let model: RemoteViewModel
 
     var body: some View {
         VStack(spacing: 0) {
@@ -77,7 +77,7 @@ struct RemoteView: View {
         HStack(spacing: 10) {
             VStack(alignment: .leading, spacing: 1) {
                 if model.televisions.count > 1 {
-                    Picker("TV", selection: $model.selectedTV) {
+                    Picker("TV", selection: Binding(get: { model.selectedTV }, set: model.select)) {
                         ForEach(model.televisions) { tv in Text(tv.name).tag(Optional(tv)) }
                     }
                     .labelsHidden()
@@ -95,7 +95,7 @@ struct RemoteView: View {
             if !model.inputSources.isEmpty {
                 sourceMenu
             }
-            powerMenu
+            powerButton
         }
     }
 
@@ -115,19 +115,22 @@ struct RemoteView: View {
         .help("Source")
     }
 
-    private var powerMenu: some View {
-        Menu {
-            Button("Turn On") { model.press(.powerOn) }
-            Button("Turn Off") { model.press(.powerOff) }
-        } label: {
+    private var powerButton: some View {
+        let isOn = model.isPoweredOn == true
+        return Button(action: model.togglePower) {
             Image(systemName: "power")
+                .font(.system(size: 12, weight: .bold))
+                .frame(width: 28, height: 28)
         }
-        .menuStyle(.borderlessButton)
-        .menuIndicator(.hidden)
-        .tint(.red)
-        .fixedSize()
+        .buttonStyle(PressableStyle(
+            shape: Circle(),
+            fill: isOn ? Color.red : Color.secondary.opacity(0.18),
+            pressedFill: isOn ? Color.red.opacity(0.7) : Color.secondary.opacity(0.3),
+            foreground: isOn ? Color.white : Color.secondary
+        ))
+        .animation(.easeOut(duration: 0.15), value: isOn)
         .disabled(!model.supports(.powerOff))
-        .help("Power")
+        .help(isOn ? "Turn off" : "Turn on")
     }
 
     private var footer: some View {
