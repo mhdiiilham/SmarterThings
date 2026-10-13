@@ -142,7 +142,7 @@ final class RemoteViewModel {
             do {
                 let route = try await keyDispatcher.press(key, on: tv)
                 let elapsed = start.duration(to: .now)
-                keyLog.info("\(String(describing: key), privacy: .public) via \(route.rawValue, privacy: .public) in \(elapsed.milliseconds, privacy: .public) ms")
+                keyLog.notice("\(String(describing: key), privacy: .public) via \(route.rawValue, privacy: .public) in \(elapsed.milliseconds, privacy: .public) ms")
             } catch {
                 keyLog.error("\(String(describing: key), privacy: .public) failed: \(String(describing: error), privacy: .public)")
                 showCommandFailure(error)
