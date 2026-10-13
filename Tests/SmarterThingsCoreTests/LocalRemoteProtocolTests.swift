@@ -34,6 +34,20 @@ struct LocalRemoteProtocolTests {
         #expect(LocalRemoteProtocol.parseEvent(message) == expected)
     }
 
+    @Test(arguments: [
+        (RemoteKey.up, "KEY_UP"), (.down, "KEY_DOWN"), (.left, "KEY_LEFT"), (.right, "KEY_RIGHT"),
+        (.ok, "KEY_ENTER"), (.volumeUp, "KEY_VOLUP"), (.volumeDown, "KEY_VOLDOWN"),
+    ])
+    func keyMessageClicksSamsungKeyCode(key: RemoteKey, code: String) throws {
+        let message = try #require(LocalRemoteProtocol.keyMessage(key))
+        #expect(try params(of: message)
+            == ["Cmd": "Click", "DataOfCmd": code, "Option": "false", "TypeOfRemote": "SendRemoteKey"])
+    }
+
+    @Test func keysWithoutLocalCodeHaveNoMessage() {
+        #expect(LocalRemoteProtocol.keyMessage(.home) == nil)
+    }
+
     private func params(of message: String) throws -> [String: String]? {
         let json = try JSONSerialization.jsonObject(with: Data(message.utf8)) as? [String: Any]
         #expect(json?["method"] as? String == "ms.remote.control")

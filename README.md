@@ -92,7 +92,7 @@ The app reaches the TV in two ways, because neither one can do everything:
 
 | | SmartThings cloud | Local network |
 |---|---|---|
-| Used for | Remote buttons, power state, inputs, opening apps, TV search | Typing into the open keyboard, checking installed apps, finding the TV |
+| Used for | Other remote buttons, power state, inputs, opening apps, TV search, and D-pad/volume when the TV isn't reachable locally | D-pad, OK and volume ±, typing into the open keyboard, checking installed apps, finding the TV |
 | Endpoint | `https://api.smartthings.com/v1` | `wss://<tv-ip>:8002/...` (typing), `http://<tv-ip>:8001/api/v2/...` (info, apps) |
 | Auth | Personal Access Token (Bearer) | Typing: TV pairing token, issued after you click "Allow" on the TV. Info and apps: none |
 | Works | Anywhere with internet | Only on the same network as the TV |
@@ -122,6 +122,7 @@ The command shapes come from SmartThings' capability definitions (`GET /capabili
 2. **Installed apps.** For each known app ID, `GET http://<tv-ip>:8001/api/v2/applications/<id>` returns 200 with the app's name if it's installed, or 404 if not. There's no cloud API for listing apps, and `ed.installedApp.get` over the WebSocket isn't confirmed to work on newer firmware.
 3. **Connect (for typing).** A WebSocket to port 8002, with the app name base64-encoded in `name` and the saved pairing token in `token`. The TV replies `ms.channel.connect`; the first time, that reply includes the new token. The TV uses a self-signed certificate, which the app trusts only for the TV's own address. The TV drops idle connections, so a failed send reconnects once and retries.
 4. **Typing.** `ms.remote.control` with `TypeOfRemote: "SendInputString"` and base64 text, then `SendInputEnd` to apply it.
+5. **Keys.** `ms.remote.control` with `TypeOfRemote: "SendRemoteKey"`, `Cmd: "Click"` and a key code (`KEY_UP`, `KEY_DOWN`, `KEY_LEFT`, `KEY_RIGHT`, `KEY_ENTER`, `KEY_VOLUP`, `KEY_VOLDOWN`). `KeyDispatcher` sends the D-pad and volume this way because the cloud allows only 12 commands a minute. If the local connection fails, the key goes through SmartThings and local is skipped for 60 seconds. Concurrent presses share one connection attempt, so the TV only asks "Allow" once.
 
 ### Code layout
 
@@ -152,7 +153,7 @@ The token folder is readable only by your user account (0700, with files 0600). 
 
 ## Limitations
 
-- **SmartThings allows 12 commands per minute per TV.** Fast D-pad or volume presses can hit this. The app then shows a short notice with the seconds until the limit resets, from the `x-ratelimit-reset` header, and the remote stays usable. See [SmartThings rate limits](https://developer.smartthings.com/docs/getting-started/rate-limits).
+- **SmartThings allows 12 commands per minute per TV.** D-pad and volume avoid this by going over the local network at home. Other buttons, and D-pad/volume away from home, can still hit it. The app then shows a short notice with the seconds until the limit resets, from the `x-ratelimit-reset` header, and the remote stays usable. See [SmartThings rate limits](https://developer.smartthings.com/docs/getting-started/rate-limits).
 - **SmartThings tokens expire after 24 hours.** Personal Access Tokens created since late 2024 are short-lived. When one expires, the remote asks for a new one. A long-lived connection would need SmartThings OAuth through a registered SmartApp, which this app doesn't implement.
 - **Power on depends on the TV.** Turning the TV on from the cloud only works if network standby is enabled on the TV. Turning it off always works.
 - **Power and mute state can drift.** Power is re-read each time you open the remote. Mute state is only tracked locally, so it can get out of sync if you use the physical remote.

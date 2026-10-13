@@ -1,14 +1,16 @@
 import Foundation
 
-/// Talks to the TV directly over its local remote WebSocket (wss, port 8002) to type text
-/// into Samsung's on-screen keyboard, which the SmartThings cloud can't do.
-/// The first connection makes the TV ask "Allow?"; the token it then sends is reused.
-public actor LocalTVRemote: TVKeyboard {
+/// Talks to the TV directly over its local remote WebSocket (wss, port 8002): typing into
+/// Samsung's on-screen keyboard (which the cloud can't do) and pressing keys without the
+/// cloud's rate limit. The first connection makes the TV ask "Allow?"; its token is reused.
+public actor LocalTVRemote: TVKeyboard, TVKeyPresser {
     private let hostFinder: TVHostFinder
     private let tokenStore: TokenStore
     private let appName: String
     private let approvalTimeout: Duration
     private var socket: URLSessionWebSocketTask?
+    /// Shared by concurrent callers so rapid presses open one connection (and one prompt).
+    private var pendingConnection: Task<URLSessionWebSocketTask, Error>?
 
     public init(
         hostFinder: TVHostFinder,
@@ -29,6 +31,13 @@ public actor LocalTVRemote: TVKeyboard {
         }
     }
 
+
+    public func press(_ key: RemoteKey) async throws {
+        guard let message = LocalRemoteProtocol.keyMessage(key) else { throw LocalTVError.unsupportedKey }
+        try await withSocket { socket in
+            try await socket.send(.string(message))
+        }
+    }
 
     /// Closes the connection, e.g. after switching to another TV.
     public func disconnect() {
@@ -53,7 +62,17 @@ public actor LocalTVRemote: TVKeyboard {
 
     private func connectedSocket() async throws -> URLSessionWebSocketTask {
         if let socket, socket.closeCode == .invalid, socket.state == .running { return socket }
+        if let pendingConnection { return try await pendingConnection.value }
 
+        let connection = Task { try await openSocket() }
+        pendingConnection = connection
+        defer { pendingConnection = nil }
+        let newSocket = try await connection.value
+        socket = newSocket
+        return newSocket
+    }
+
+    private func openSocket() async throws -> URLSessionWebSocketTask {
         let host = try await hostFinder.host()
         let url = LocalRemoteProtocol.connectURL(host: host, appName: appName, token: tokenStore.token())
         let session = URLSession(configuration: .ephemeral, delegate: SelfSignedTVTrust(host: host), delegateQueue: nil)
@@ -68,7 +87,6 @@ public actor LocalTVRemote: TVKeyboard {
             switch event {
             case .connected(let token):
                 if let token { try? tokenStore.save(token) }
-                socket = newSocket
                 return newSocket
             case .unauthorized, .other:
                 newSocket.cancel()

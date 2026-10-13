@@ -31,6 +31,18 @@ enum LocalRemoteProtocol {
         ])
     }
 
+    /// Samsung key codes for the keys sent over the local connection.
+    private static let keyCodes: [RemoteKey: String] = [
+        .up: "KEY_UP", .down: "KEY_DOWN", .left: "KEY_LEFT", .right: "KEY_RIGHT", .ok: "KEY_ENTER",
+        .volumeUp: "KEY_VOLUP", .volumeDown: "KEY_VOLDOWN",
+    ]
+
+    /// `nil` for keys that don't have a local key code here.
+    static func keyMessage(_ key: RemoteKey) -> String? {
+        guard let code = keyCodes[key] else { return nil }
+        return remoteControl(["Cmd": "Click", "DataOfCmd": code, "Option": "false", "TypeOfRemote": "SendRemoteKey"])
+    }
+
     /// Closes the TV keyboard and applies the text, which submits search fields.
     static let inputEndMessage = remoteControl(["TypeOfRemote": "SendInputEnd"])
 

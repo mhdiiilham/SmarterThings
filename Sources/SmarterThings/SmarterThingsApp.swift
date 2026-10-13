@@ -11,7 +11,6 @@ struct SmarterThingsApp: App {
     init() {
         let tokenStore = FileTokenStore(name: "smartthings-token")
         let controller = SmartThingsClient(tokenStore: tokenStore)
-        model = RemoteViewModel(controller: controller, tokenStore: tokenStore)
 
         let hostFinder = TVHostFinder(
             manualHost: { UserDefaults.standard.string(forKey: TypingViewModel.manualHostKey) },
@@ -21,6 +20,14 @@ struct SmarterThingsApp: App {
             hostFinder: hostFinder,
             tokenStore: FileTokenStore(name: "local-tv-token")
         )
+        // The most-pressed keys go over the local network: SmartThings allows only
+        // 12 commands a minute per TV. Everything else stays on the cloud.
+        let keyDispatcher = KeyDispatcher(
+            local: localTV,
+            cloud: controller,
+            localKeys: [.up, .down, .left, .right, .ok, .volumeUp, .volumeDown]
+        )
+        model = RemoteViewModel(controller: controller, keyDispatcher: keyDispatcher, tokenStore: tokenStore)
         typing = TypingViewModel(keyboard: localTV) { [model] query in try await model.search(query) }
         shortcuts = AppShortcutsViewModel(
             knownApps: PopularApps.all,

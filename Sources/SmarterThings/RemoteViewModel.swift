@@ -23,11 +23,13 @@ final class RemoteViewModel {
     private(set) var notice: String?
 
     private let controller: TVController
+    private let keyDispatcher: KeyDispatcher
     private let tokenStore: TokenStore
     private var noticeDismissal: Task<Void, Never>?
 
-    init(controller: TVController, tokenStore: TokenStore) {
+    init(controller: TVController, keyDispatcher: KeyDispatcher, tokenStore: TokenStore) {
         self.controller = controller
+        self.keyDispatcher = keyDispatcher
         self.tokenStore = tokenStore
     }
 
@@ -78,8 +80,16 @@ final class RemoteViewModel {
         status = .needsToken(reason: nil)
     }
 
+    /// Routed by KeyDispatcher: D-pad and volume go local when possible, the rest via cloud.
     func press(_ key: RemoteKey) {
-        send(key.command)
+        guard let tv = selectedTV else { return }
+        Task {
+            do {
+                try await keyDispatcher.press(key, on: tv)
+            } catch {
+                showCommandFailure(error)
+            }
+        }
     }
 
     /// When the state is unknown, turn on: harmless if the TV is already on.
