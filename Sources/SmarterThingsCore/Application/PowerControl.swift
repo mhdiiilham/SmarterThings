@@ -28,6 +28,18 @@ public struct PowerControl: Sendable {
         return try? await cloud.isPoweredOn(cloudTV)
     }
 
+    /// Decides from a fresh reading, never a cached one: `KEY_POWER` is a toggle, so acting on
+    /// a stale "on" would send it to a TV that's already off. Returns the new power state.
+    @discardableResult
+    public func toggle(cloudTV: TV?) async throws -> Bool {
+        if await isPoweredOn(cloudTV: cloudTV) == true {
+            try await turnOff(cloudTV: cloudTV)
+            return false
+        }
+        try await turnOn(cloudTV: cloudTV)
+        return true
+    }
+
     public func turnOff(cloudTV: TV?) async throws {
         try await keys.press(.powerOff, on: cloudTV)
     }

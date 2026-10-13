@@ -22,6 +22,7 @@ struct RemoteView: View {
         .frame(width: model.status == .ready && !model.isEditingToken ? 724 : 320)
         .task { await model.loadIfNeeded() }
         .task { await model.warmUpLocalKeys() }
+        .task { await model.watchPowerState() }
     }
 
     @ViewBuilder
@@ -182,9 +183,14 @@ struct RemoteView: View {
     private var powerButton: some View {
         let isOn = model.isPoweredOn == true
         return Button(action: model.togglePower) {
-            Image(systemName: "power")
-                .font(.system(size: 12, weight: .bold))
-                .frame(width: 28, height: 28)
+            Group {
+                if model.isChangingPower {
+                    ProgressView().controlSize(.mini)
+                } else {
+                    Image(systemName: "power").font(.system(size: 12, weight: .bold))
+                }
+            }
+            .frame(width: 28, height: 28)
         }
         .buttonStyle(GlassSurfaceButtonStyle(
             shape: Circle(),

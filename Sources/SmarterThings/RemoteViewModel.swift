@@ -24,6 +24,8 @@ final class RemoteViewModel {
     private(set) var isMuted = false
     /// `nil` while unknown.
     private(set) var isPoweredOn: Bool?
+    /// A power change is in progress; further clicks are ignored until it settles.
+    private(set) var isChangingPower = false
     /// Short-lived message about a failed command; the remote stays usable.
     private(set) var notice: String?
     var isEditingToken = false
@@ -153,23 +155,32 @@ final class RemoteViewModel {
         await keyDispatcher.warmUp()
     }
 
-    /// On: `KEY_POWER` (local). Off or unknown: Wake-on-LAN, plus SmartThings when available.
+    /// Asks the TV for its current state first (the icon may be stale, e.g. after using the
+    /// physical remote), then turns it off with `KEY_POWER` or on with Wake-on-LAN.
+    /// The TV takes a few seconds to change, so the state is read again afterwards.
     func togglePower() {
-        let wasPoweredOn = isPoweredOn
-        let isTurningOff = wasPoweredOn == true
-        isPoweredOn = !isTurningOff
+        guard !isChangingPower else { return }
+        isChangingPower = true
         let tv = cloudTV
         Task {
+            defer { isChangingPower = false }
             do {
-                if isTurningOff {
-                    try await power.turnOff(cloudTV: tv)
-                } else {
-                    try await power.turnOn(cloudTV: tv)
-                }
+                isPoweredOn = try await power.toggle(cloudTV: tv)
             } catch {
-                isPoweredOn = wasPoweredOn
                 showCommandFailure(error)
             }
+            try? await Task.sleep(for: .seconds(6))
+            isPoweredOn = await power.isPoweredOn(cloudTV: cloudTV)
+        }
+    }
+
+    /// Keeps the power icon in sync while the remote is open (e.g. TV turned off with its
+    /// own remote). Runs until the calling task is cancelled, i.e. the popover closes.
+    func watchPowerState(every interval: Duration = .seconds(10)) async {
+        while !Task.isCancelled {
+            try? await Task.sleep(for: interval)
+            guard !Task.isCancelled, status == .ready, !isChangingPower else { continue }
+            isPoweredOn = await power.isPoweredOn(cloudTV: cloudTV)
         }
     }
 

@@ -75,13 +75,38 @@ struct LocalFirstTests {
         await #expect(throws: WakeOnLAN.Failure.invalidMACAddress) { try await power.turnOn(cloudTV: nil) }
     }
 
+    // MARK: Toggle decides from the TV's current state
+
+    @Test func toggleTurnsOffATVThatIsOn() async throws {
+        let presser = Presser(), woke = Flag()
+        let isOn = try await makePower(localState: true, presser: presser, wake: { await woke.set() }).toggle(cloudTV: nil)
+        #expect(isOn == false)
+        #expect(await presser.pressed == [.powerOff])
+        #expect(await !woke.isSet)
+    }
+
+    @Test func toggleWakesATVInStandby() async throws {
+        let presser = Presser(), woke = Flag()
+        let isOn = try await makePower(localState: false, presser: presser, wake: { await woke.set() }).toggle(cloudTV: nil)
+        #expect(isOn == true)
+        #expect(await woke.isSet)
+        #expect(await presser.pressed.isEmpty)   // never KEY_POWER to a TV that's off
+    }
+
+    @Test func toggleWakesAnUnreachableTV() async throws {
+        let woke = Flag()
+        try await makePower(localState: nil, wake: { await woke.set() }).toggle(cloudTV: nil)
+        #expect(await woke.isSet)
+    }
+
     private func makePower(
         localState: Bool? = true,
         cloud: Cloud = Cloud(),
+        presser: Presser = Presser(),
         wake: @escaping @Sendable () async throws -> Void = {}
     ) -> PowerControl {
         PowerControl(
-            keys: KeyDispatcher(local: Presser(), cloud: cloud, localKeys: [.powerOff]),
+            keys: KeyDispatcher(local: presser, cloud: cloud, localKeys: [.powerOff]),
             cloud: cloud,
             localPowerState: { localState },
             wake: wake
@@ -91,9 +116,13 @@ struct LocalFirstTests {
 
 private actor Presser: TVKeyPresser {
     private let failure: Error?
+    private(set) var pressed: [RemoteKey] = []
     init(failure: Error? = nil) { self.failure = failure }
     func prepare() async throws {}
-    func press(_ key: RemoteKey) async throws { if let failure { throw failure } }
+    func press(_ key: RemoteKey) async throws {
+        if let failure { throw failure }
+        pressed.append(key)
+    }
 }
 
 private actor Opener: TVAppOpener {
