@@ -7,6 +7,7 @@ struct SmarterThingsApp: App {
     private let typing: TypingViewModel
     private let shortcuts: AppShortcutsViewModel
     private let localTVs: LocalTVPickerViewModel
+    private let keyboard = KeyboardViewModel(keyboard: BluetoothHIDKeyboard())
 
     init() {
         let tokenStore = FileTokenStore(name: "smartthings-token")
@@ -46,7 +47,7 @@ struct SmarterThingsApp: App {
 
     var body: some Scene {
         MenuBarExtra("SmarterThings", systemImage: "tv") {
-            RemoteView(model: model, typing: typing, shortcuts: shortcuts, localTVs: localTVs)
+            RemoteView(model: model, typing: typing, shortcuts: shortcuts, localTVs: localTVs, keyboard: keyboard)
         }
         .menuBarExtraStyle(.window)
     }

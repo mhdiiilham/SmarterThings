@@ -6,6 +6,7 @@ struct RemoteView: View {
     let typing: TypingViewModel
     let shortcuts: AppShortcutsViewModel
     let localTVs: LocalTVPickerViewModel
+    let keyboard: KeyboardViewModel
 
     var body: some View {
         VStack(spacing: 0) {
@@ -51,6 +52,7 @@ struct RemoteView: View {
                         if model.canLaunchApps {
                             AppShortcutsSection(model: shortcuts, onLaunch: model.launch)
                         }
+                        KeyboardSection(model: keyboard)
                         TypeOnTVField(model: typing, canSearch: model.canSearch)
                     }
                 }

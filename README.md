@@ -82,6 +82,15 @@ The first time you press Return, two prompts appear:
 
 The app finds the TV on your network automatically. If you have several Samsung TVs, pick one from the Wi-Fi menu in the footer. Your choice is remembered by the TV's own ID, not its IP, so it keeps working when the router gives the TV a new address. If no TV can be found, the error message under the field has a box for the TV's IP address as a fallback. On the TV it's under Settings › General › Network › Network Status › IP Settings.
 
+### Keyboard (type with your Mac's keyboard)
+
+SmarterThings can act as a **Bluetooth keyboard** for the TV, which works in every app, including YouTube and Netflix:
+
+1. In the **Keyboard** section, click **Connect as Bluetooth keyboard** and pick your TV. The first time, macOS asks for Bluetooth access, and the TV and Mac show a pairing code to confirm.
+2. Click **Start typing to TV**. While the menu is open, your Mac's key presses go to the TV, including Delete, Return and the arrows. Click again to stop. ⌘ shortcuts stay on the Mac.
+
+The TV is remembered for next time. Quit other keyboard apps (e.g. KeyPad) first, since only one app can act as the Mac's keyboard at a time.
+
 ### 4. App shortcuts
 
 Click ✎ next to **Shortcuts**. The app checks which known apps are installed on the TV and lists only those, using the TV's names. Tick up to four, then click ✓. Clicking a tile opens that app on the TV through SmartThings, which also works away from home.
@@ -123,6 +132,16 @@ The command shapes come from SmartThings' capability definitions (`GET /capabili
 3. **Connect (for typing).** A WebSocket to port 8002, with the app name base64-encoded in `name` and the saved pairing token in `token`. The TV replies `ms.channel.connect`; the first time, that reply includes the new token. The TV uses a self-signed certificate, which the app trusts only for the TV's own address. The TV drops idle connections, so a failed send reconnects once and retries.
 4. **Typing.** `ms.remote.control` with `TypeOfRemote: "SendInputString"` and base64 text, then `SendInputEnd` to apply it.
 5. **Keys.** `ms.remote.control` with `TypeOfRemote: "SendRemoteKey"`, `Cmd: "Click"` and a key code (`KEY_UP`, `KEY_DOWN`, `KEY_LEFT`, `KEY_RIGHT`, `KEY_ENTER`, `KEY_VOLUP`, `KEY_VOLDOWN`). `KeyDispatcher` sends the D-pad and volume this way because the cloud allows only 12 commands a minute. If the local connection fails, the key goes through SmartThings and local is skipped for 60 seconds. Concurrent presses share one connection attempt, so the TV only asks "Allow" once.
+
+### Bluetooth keyboard (classic Bluetooth HID)
+
+`BluetoothHIDKeyboard` uses IOBluetooth to act as a keyboard, following the Bluetooth HID Profile:
+
+1. Publishes an SDP service record for a HID keyboard (`HIDKeyboardProtocol.serviceRecord`): service class `0x1124`, control PSM `0x11`, interrupt PSM `0x13`, subclass `0x40`, and the HID spec's boot keyboard report descriptor with report ID 1.
+2. Temporarily sets the Mac's class of device to keyboard (`0x002540`).
+3. Connects to the TV (chosen with macOS's Bluetooth device picker) and opens both L2CAP channels asynchronously.
+4. Sends each key as a press report (`A1 01 <modifiers> 00 <usage> …`) followed by a release report on the interrupt channel. Mac key codes are mapped to HID usages by `MacKeyCodeMap`.
+5. Answers the TV's control requests (SET_PROTOCOL, SET_IDLE, GET_REPORT, …) with HID handshakes.
 
 ### Code layout
 
@@ -177,6 +196,7 @@ The token folder is readable only by your user account (0700, with files 0600). 
 | Typing into Tizen's own search | ✅ (YouTube ignores it, as noted above) |
 | 🔍 TV search (`custom.tvsearch`) | ✅ Shows results |
 | Checking installed apps (`/api/v2/applications/<id>`) | ✅ 7 of 31 known IDs found on the test TV |
+| Bluetooth keyboard | ❓ Not tested on a TV yet |
 | Opening apps (`custom.launchapp`) | ❓ Not tested yet |
 | Power toggle and the other cloud buttons | Not explicitly confirmed yet |
 
