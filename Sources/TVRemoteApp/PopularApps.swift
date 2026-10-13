@@ -19,7 +19,7 @@ enum PopularApps {
         TVApp(id: "3201710015037", name: "Samsung TV Plus"),
         TVApp(id: "3201804016153", name: "Hotstar"),
         TVApp(id: "3201703012079", name: "Viu"),
-        TVApp(id: "3201809016736", name: "Vidio"),
+        TVApp(id: "3201903017967", name: "Vidio"),
         TVApp(id: "3201905018355", name: "iQIYI"),
         TVApp(id: "3202010022079", name: "Browser"),
     ]
