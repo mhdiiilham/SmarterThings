@@ -5,45 +5,63 @@ struct RemoteView: View {
     @Bindable var model: RemoteViewModel
 
     var body: some View {
-        VStack(spacing: 12) {
-            switch model.status {
-            case .needsToken(let reason):
-                TokenView(reason: reason) { token in Task { await model.saveToken(token) } }
-            case .loading:
-                ProgressView().frame(maxWidth: .infinity, minHeight: 120)
-            case .failed(let message):
-                FailureView(message: message) { Task { await model.load() } }
-            case .ready:
-                remote
-            }
+        VStack(spacing: 0) {
+            content
+                .padding(.horizontal, 18)
+                .padding(.top, 16)
+                .padding(.bottom, 14)
             Divider()
             footer
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
         }
-        .padding(14)
-        .frame(width: 260)
+        .frame(width: 252)
         .task { await model.load() }
     }
 
+    @ViewBuilder
+    private var content: some View {
+        switch model.status {
+        case .needsToken(let reason):
+            TokenView(reason: reason) { token in Task { await model.saveToken(token) } }
+        case .loading:
+            ProgressView().controlSize(.small).frame(maxWidth: .infinity, minHeight: 160)
+        case .failed(let message):
+            FailureView(message: message) { Task { await model.load() } }
+        case .ready:
+            remote
+        }
+    }
+
     private var remote: some View {
-        VStack(spacing: 14) {
+        VStack(spacing: 18) {
             header
-            DirectionPad(model: model)
-            HStack(alignment: .top, spacing: 16) {
-                Rocker(title: "VOL", up: .volumeUp, down: .volumeDown, model: model)
-                VStack(spacing: 8) {
-                    KeyButton(
-                        symbol: model.isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill",
-                        help: "Mute"
-                    ) { model.toggleMute() }
-                        .disabled(!model.supports(.mute))
-                    KeyButton(symbol: "house.fill", help: "Home") { model.press(.home) }
-                        .disabled(!model.supports(.home))
-                    KeyButton(symbol: "line.3.horizontal", help: "Menu") { model.press(.menu) }
-                        .disabled(!model.supports(.menu))
-                }
-                Rocker(title: "CH", up: .channelUp, down: .channelDown, model: model)
+            DirectionPad(onPress: model.press)
+                .disabled(!model.supports(.ok))
+            HStack(spacing: 22) {
+                LabeledIconButton(symbol: "arrow.uturn.backward", title: "Back") { model.press(.back) }
+                LabeledIconButton(symbol: "house.fill", title: "Home") { model.press(.home) }
+                LabeledIconButton(symbol: "line.3.horizontal", title: "Menu") { model.press(.menu) }
             }
-            MediaRow(model: model)
+            .disabled(!model.supports(.home))
+            HStack {
+                Rocker(title: "VOL", upKey: .volumeUp, downKey: .volumeDown, onPress: model.press)
+                    .disabled(!model.supports(.volumeUp))
+                Spacer()
+                LabeledIconButton(
+                    symbol: model.isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill",
+                    title: model.isMuted ? "Unmute" : "Mute",
+                    size: 50,
+                    action: model.toggleMute
+                )
+                .disabled(!model.supports(.mute))
+                Spacer()
+                Rocker(title: "CH", upKey: .channelUp, downKey: .channelDown, onPress: model.press)
+                    .disabled(!model.supports(.channelUp))
+            }
+            .padding(.horizontal, 6)
+            MediaBar(onPress: model.press)
+                .disabled(!model.supports(.play))
         }
         .focusable()
         .focusEffectDisabled()
@@ -56,149 +74,88 @@ struct RemoteView: View {
     }
 
     private var header: some View {
-        HStack {
-            if model.televisions.count > 1 {
-                Picker("TV", selection: $model.selectedTV) {
-                    ForEach(model.televisions) { tv in Text(tv.name).tag(Optional(tv)) }
-                }
-                .labelsHidden()
-            } else {
-                Text(model.selectedTV?.name ?? "TV").font(.headline).lineLimit(1)
-            }
-            Spacer()
-            if !model.inputSources.isEmpty {
-                Menu {
-                    ForEach(model.inputSources) { source in
-                        Button(source.name) { model.selectInput(source) }
+        HStack(spacing: 10) {
+            VStack(alignment: .leading, spacing: 1) {
+                if model.televisions.count > 1 {
+                    Picker("TV", selection: $model.selectedTV) {
+                        ForEach(model.televisions) { tv in Text(tv.name).tag(Optional(tv)) }
                     }
-                } label: {
-                    Image(systemName: "rectangle.on.rectangle")
+                    .labelsHidden()
+                    .fixedSize()
+                } else {
+                    Text(model.selectedTV?.name ?? "TV")
+                        .font(.system(size: 13, weight: .semibold))
+                        .lineLimit(1)
                 }
-                .menuStyle(.borderlessButton)
-                .fixedSize()
-                .help("Source")
+                Text("SmartThings")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.secondary)
             }
-            Menu {
-                Button("Turn On") { model.press(.powerOn) }
-                Button("Turn Off") { model.press(.powerOff) }
-            } label: {
-                Image(systemName: "power")
+            Spacer(minLength: 0)
+            if !model.inputSources.isEmpty {
+                sourceMenu
             }
-            .menuStyle(.borderlessButton)
-            .fixedSize()
-            .disabled(!model.supports(.powerOff))
-            .help("Power")
+            powerMenu
         }
+    }
+
+    private var sourceMenu: some View {
+        Menu {
+            Section("Source") {
+                ForEach(model.inputSources) { source in
+                    Button(source.name) { model.selectInput(source) }
+                }
+            }
+        } label: {
+            Image(systemName: "rectangle.portrait.and.arrow.right")
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help("Source")
+    }
+
+    private var powerMenu: some View {
+        Menu {
+            Button("Turn On") { model.press(.powerOn) }
+            Button("Turn Off") { model.press(.powerOff) }
+        } label: {
+            Image(systemName: "power")
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .tint(.red)
+        .fixedSize()
+        .disabled(!model.supports(.powerOff))
+        .help("Power")
     }
 
     private var footer: some View {
-        HStack {
+        HStack(spacing: 14) {
             if model.status == .ready {
-                Button("Refresh") { Task { await model.load() } }
-                Button("Token…") { model.changeToken() }
+                FooterButton(symbol: "arrow.clockwise", help: "Refresh TVs") { Task { await model.load() } }
+                FooterButton(symbol: "key", help: "Change token") { model.changeToken() }
             }
             Spacer()
             Button("Quit") { NSApplication.shared.terminate(nil) }
+                .buttonStyle(.borderless)
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
         }
-        .buttonStyle(.borderless)
-        .font(.caption)
-        .foregroundStyle(.secondary)
     }
 }
 
-private struct DirectionPad: View {
-    let model: RemoteViewModel
-
-    var body: some View {
-        Grid(horizontalSpacing: 6, verticalSpacing: 6) {
-            GridRow {
-                KeyButton(symbol: "arrow.uturn.backward", help: "Back") { model.press(.back) }
-                pad(.up, "chevron.up")
-                Color.clear.frame(width: 36, height: 36)
-            }
-            GridRow {
-                pad(.left, "chevron.left")
-                KeyButton(title: "OK", help: "OK", isProminent: true) { model.press(.ok) }
-                pad(.right, "chevron.right")
-            }
-            GridRow {
-                Color.clear.frame(width: 36, height: 36)
-                pad(.down, "chevron.down")
-                Color.clear.frame(width: 36, height: 36)
-            }
-        }
-        .disabled(!model.supports(.ok))
-    }
-
-    private func pad(_ key: RemoteKey, _ symbol: String) -> some View {
-        KeyButton(symbol: symbol, help: "\(key)".capitalized) { model.press(key) }
-    }
-}
-
-private struct Rocker: View {
-    let title: String
-    let up: RemoteKey
-    let down: RemoteKey
-    let model: RemoteViewModel
-
-    var body: some View {
-        VStack(spacing: 4) {
-            KeyButton(symbol: "plus", help: "\(title) up") { model.press(up) }
-            Text(title).font(.caption2).foregroundStyle(.secondary)
-            KeyButton(symbol: "minus", help: "\(title) down") { model.press(down) }
-        }
-        .disabled(!model.supports(up))
-    }
-}
-
-private struct MediaRow: View {
-    let model: RemoteViewModel
-
-    private let keys: [(RemoteKey, String)] = [
-        (.rewind, "backward.fill"), (.play, "play.fill"), (.pause, "pause.fill"),
-        (.stop, "stop.fill"), (.fastForward, "forward.fill"),
-    ]
-
-    var body: some View {
-        HStack(spacing: 6) {
-            ForEach(keys, id: \.1) { key, symbol in
-                KeyButton(symbol: symbol, help: "\(key)".capitalized) { model.press(key) }
-            }
-        }
-        .disabled(!model.supports(.play))
-    }
-}
-
-private struct KeyButton: View {
-    var symbol: String?
-    var title: String?
+private struct FooterButton: View {
+    let symbol: String
     let help: String
-    var isProminent = false
     let action: () -> Void
-
-    init(symbol: String, help: String, action: @escaping () -> Void) {
-        self.symbol = symbol
-        self.help = help
-        self.action = action
-    }
-
-    init(title: String, help: String, isProminent: Bool, action: @escaping () -> Void) {
-        self.title = title
-        self.help = help
-        self.isProminent = isProminent
-        self.action = action
-    }
 
     var body: some View {
         Button(action: action) {
-            Group {
-                if let symbol { Image(systemName: symbol) } else { Text(title ?? "").bold() }
-            }
-            .frame(width: 36, height: 36)
-            .background(isProminent ? Color.accentColor.opacity(0.25) : Color.primary.opacity(0.08), in: Circle())
-            .contentShape(Circle())
+            Image(systemName: symbol).font(.system(size: 11, weight: .medium))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.borderless)
+        .foregroundStyle(.secondary)
         .help(help)
     }
 }
@@ -212,20 +169,24 @@ private struct TokenView: View {
     private var token: String { tokenState.wrappedValue }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("SmartThings token").font(.headline)
-            Text(reason ?? "Create a Personal Access Token with device read and execute scopes, then paste it here.")
-                .font(.caption)
+        VStack(alignment: .leading, spacing: 10) {
+            Image(systemName: "tv").font(.system(size: 22)).foregroundStyle(.tint)
+            Text("Connect to SmartThings").font(.system(size: 13, weight: .semibold))
+            Text(reason ?? "Create a Personal Access Token with device read and execute access, then paste it here.")
+                .font(.system(size: 11))
                 .foregroundStyle(reason == nil ? Color.secondary : Color.orange)
                 .fixedSize(horizontal: false, vertical: true)
-            Link("Open account.smartthings.com/tokens",
-                 destination: URL(string: "https://account.smartthings.com/tokens")!)
-                .font(.caption)
-            SecureField("Token", text: tokenState.projectedValue)
+            Link("Create a token ↗", destination: URL(string: "https://account.smartthings.com/tokens")!)
+                .font(.system(size: 11))
+            SecureField("Paste token", text: tokenState.projectedValue)
+                .textFieldStyle(.roundedBorder)
                 .onSubmit { onSave(token) }
-            Button("Save") { onSave(token) }
-                .keyboardShortcut(.defaultAction)
-                .disabled(token.isEmpty)
+            Button { onSave(token) } label: {
+                Text("Connect").frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+            .keyboardShortcut(.defaultAction)
+            .disabled(token.isEmpty)
         }
     }
 }
@@ -235,11 +196,11 @@ private struct FailureView: View {
     let onRetry: () -> Void
 
     var body: some View {
-        VStack(spacing: 8) {
-            Image(systemName: "exclamationmark.triangle").font(.title2).foregroundStyle(.orange)
-            Text(message).font(.callout).multilineTextAlignment(.center)
-            Button("Try Again", action: onRetry)
+        VStack(spacing: 10) {
+            Image(systemName: "exclamationmark.triangle.fill").font(.title2).foregroundStyle(.orange)
+            Text(message).font(.system(size: 12)).multilineTextAlignment(.center)
+            Button("Try Again", action: onRetry).buttonStyle(.bordered)
         }
-        .frame(maxWidth: .infinity, minHeight: 120)
+        .frame(maxWidth: .infinity, minHeight: 160)
     }
 }
