@@ -1,5 +1,9 @@
 # SmarterThings
 
+<p align="center">
+  <img src="image.png" alt="SmarterThings remote in the macOS menu bar" width="742">
+</p>
+
 A macOS menu bar remote for Samsung smart TVs. Click the TV icon in the menu bar to get a remote with a D-pad, volume and channel rockers, media keys, input sources, favorite app shortcuts and a field for typing into the TV's search boxes.
 
 > Not affiliated with or endorsed by Samsung. "Samsung" and "SmartThings" are trademarks of Samsung Electronics.
