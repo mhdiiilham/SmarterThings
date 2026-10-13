@@ -51,7 +51,7 @@ final class RemoteViewModel {
             try tokenStore.save(trimmedToken)
             await load()
         } catch {
-            status = .failed("Couldn't save the token to the Keychain.")
+            status = .failed("Couldn't save the token to ~/Library/Application Support/TVRemote.")
         }
     }
 

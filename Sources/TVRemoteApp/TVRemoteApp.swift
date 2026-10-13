@@ -7,7 +7,7 @@ struct TVRemoteApp: App {
     private let typing: TypingViewModel
 
     init() {
-        let tokenStore = KeychainTokenStore()
+        let tokenStore = FileTokenStore(name: "smartthings-token")
         let controller = SmartThingsClient(tokenStore: tokenStore)
         model = RemoteViewModel(controller: controller, tokenStore: tokenStore)
 
@@ -16,7 +16,7 @@ struct TVRemoteApp: App {
         })
         let keyboard = LocalTVKeyboard(
             hostFinder: hostFinder,
-            tokenStore: KeychainTokenStore(account: "local-tv-token")
+            tokenStore: FileTokenStore(name: "local-tv-token")
         )
         typing = TypingViewModel(keyboard: keyboard)
     }
