@@ -3,6 +3,8 @@ import SwiftUI
 /// Connect the Mac as a Bluetooth keyboard and toggle sending key presses to the TV.
 struct KeyboardSection: View {
     let model: KeyboardViewModel
+    /// The SmartThings TV's name, used to find the same TV among paired Bluetooth devices.
+    let tvName: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -13,7 +15,6 @@ struct KeyboardSection: View {
                 Spacer()
                 if case .connected = model.status {
                     Menu {
-                        Button("Switch TV…") { Task { await model.chooseTVAndConnect() } }
                         Button("Disconnect") { model.disconnect() }
                     } label: {
                         Image(systemName: "ellipsis")
@@ -26,17 +27,14 @@ struct KeyboardSection: View {
             }
             content
         }
+        .task { model.refreshPairedDevices() }
     }
 
     @ViewBuilder
     private var content: some View {
         switch model.status {
         case .disconnected:
-            Button { Task { await model.connect() } } label: {
-                Label("Connect as Bluetooth keyboard", systemImage: "keyboard")
-                    .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.glass)
+            connectControls
         case .connecting:
             HStack(spacing: 8) {
                 ProgressView().controlSize(.small)
@@ -61,8 +59,45 @@ struct KeyboardSection: View {
                 .font(.system(size: 10))
                 .foregroundStyle(.orange)
                 .fixedSize(horizontal: false, vertical: true)
-            Button("Try Again") { Task { await model.connect() } }
-                .controlSize(.small)
+            connectControls
         }
+    }
+
+    /// One click when the TV is found among paired devices; otherwise a list to choose from.
+    @ViewBuilder
+    private var connectControls: some View {
+        if let device = model.defaultDevice(matching: tvName) {
+            HStack(spacing: 6) {
+                Button { Task { await model.connect(to: device) } } label: {
+                    Label("Connect to \(device.name)", systemImage: "keyboard")
+                        .lineLimit(1)
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.glass)
+                otherDevicesMenu
+            }
+        } else {
+            otherDevicesMenu
+        }
+    }
+
+    private var otherDevicesMenu: some View {
+        Menu {
+            Section("Paired with this Mac") {
+                ForEach(model.pairedDevices) { device in
+                    Button(device.name) { Task { await model.connect(to: device) } }
+                }
+            }
+            Divider()
+            Button("Pair a New Device…") { Task { await model.pairNewDevice() } }
+        } label: {
+            Label("Choose device", systemImage: "chevron.down")
+                .labelStyle(.iconOnly)
+        }
+        .menuStyle(.button)
+        .buttonStyle(.glass)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help("Choose which Bluetooth device to type to")
     }
 }

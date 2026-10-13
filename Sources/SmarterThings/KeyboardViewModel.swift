@@ -16,10 +16,17 @@ final class KeyboardViewModel {
         case failed(String)
     }
 
+    /// A Bluetooth device this Mac is already paired with.
+    struct PairedDevice: Identifiable, Hashable {
+        let id: String   // Bluetooth address
+        let name: String
+    }
+
     nonisolated static let tvAddressKey = "bluetoothKeyboardTVAddress"
 
     private(set) var status: Status = .disconnected
     private(set) var isTyping = false
+    private(set) var pairedDevices: [PairedDevice] = []
 
     private let keyboard: BluetoothHIDKeyboard
     private let defaults: UserDefaults
@@ -34,19 +41,35 @@ final class KeyboardViewModel {
         }
     }
 
-    /// Reconnects to the remembered TV, or asks which TV to use the first time.
-    func connect() async {
-        status = .connecting
-        if let address = defaults.string(forKey: Self.tvAddressKey),
-           (try? await keyboard.connect(toAddress: address)) != nil {
-            markConnected()
-            return
-        }
-        await chooseTVAndConnect()
+    /// Already-paired devices, refreshed when the connect menu opens.
+    func refreshPairedDevices() {
+        let devices = (IOBluetoothDevice.pairedDevices() as? [IOBluetoothDevice]) ?? []
+        pairedDevices = devices
+            .map { PairedDevice(id: $0.addressString, name: $0.name ?? $0.addressString) }
+            .sorted { $0.name.localizedCompare($1.name) == .orderedAscending }
     }
 
-    /// Shows macOS's Bluetooth device picker, e.g. to switch TVs.
-    func chooseTVAndConnect() async {
+    /// The remembered TV, else the paired device named like the SmartThings TV.
+    func defaultDevice(matching tvName: String?) -> PairedDevice? {
+        let remembered = defaults.string(forKey: Self.tvAddressKey)
+        return pairedDevices.first { $0.id == remembered }
+            ?? pairedDevices.first { $0.name == tvName }
+    }
+
+    func connect(to device: PairedDevice) async {
+        status = .connecting
+        do {
+            try await keyboard.connect(toAddress: device.id)
+            defaults.set(device.id, forKey: Self.tvAddressKey)
+            markConnected()
+        } catch {
+            status = .failed(Self.message(for: error))
+        }
+    }
+
+    /// macOS's Bluetooth picker. It only lists discoverable devices, so it's for pairing a new TV;
+    /// an already-paired TV appears in `pairedDevices` instead.
+    func pairNewDevice() async {
         status = .connecting
         guard let selector = IOBluetoothDeviceSelectorController.deviceSelector() else {
             status = .failed("Bluetooth isn't available on this Mac.")
@@ -54,7 +77,7 @@ final class KeyboardViewModel {
         }
         selector.setTitle("SmarterThings Keyboard")
         selector.setPrompt("Connect")
-        selector.setDescriptionText("Choose your TV. The first time, accept the pairing code on the TV.")
+        selector.setDescriptionText("Make the TV discoverable (TV: Settings › Connection › Bluetooth Device List), then choose it and accept the pairing code.")
         NSApp.activate()
         guard selector.runModal() == Int32(kIOBluetoothUISuccess),
               let device = selector.getResults()?.first as? IOBluetoothDevice else {
@@ -74,6 +97,7 @@ final class KeyboardViewModel {
         stopTyping()
         keyboard.disconnect()
         status = .disconnected
+        refreshPairedDevices()
     }
 
     func toggleTyping() {

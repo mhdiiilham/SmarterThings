@@ -86,7 +86,7 @@ The app finds the TV on your network automatically. If you have several Samsung 
 
 SmarterThings can act as a **Bluetooth keyboard** for the TV, which works in every app, including YouTube and Netflix:
 
-1. In the **Keyboard** section, click **Connect as Bluetooth keyboard** and pick your TV. The first time, macOS asks for Bluetooth access, and the TV and Mac show a pairing code to confirm.
+1. In the **Keyboard** section, click **Connect to <your TV>**. SmarterThings finds the TV among the Mac's paired Bluetooth devices by its SmartThings name. Use the ⌄ menu to pick another paired device, or **Pair a New Device…** if the TV isn't paired with this Mac yet (make it discoverable first). The first time, macOS asks for Bluetooth access.
 2. Click **Start typing to TV**. While the menu is open, your Mac's key presses go to the TV, including Delete, Return and the arrows. Click again to stop. ⌘ shortcuts stay on the Mac.
 
 The TV is remembered for next time. Quit other keyboard apps (e.g. KeyPad) first, since only one app can act as the Mac's keyboard at a time.

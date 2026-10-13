@@ -52,7 +52,7 @@ struct RemoteView: View {
                         if model.canLaunchApps {
                             AppShortcutsSection(model: shortcuts, onLaunch: model.launch)
                         }
-                        KeyboardSection(model: keyboard)
+                        KeyboardSection(model: keyboard, tvName: model.selectedTV?.name)
                         TypeOnTVField(model: typing, canSearch: model.canSearch)
                     }
                 }
