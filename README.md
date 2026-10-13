@@ -13,7 +13,7 @@ A macOS menu bar remote for Samsung smart TVs. Click the TV icon in the menu bar
 
 ## Install
 
-1. Download `SmarterThings-<version>.dmg`, open it, and drag **SmarterThings** onto **Applications**.
+1. Download the latest `SmarterThings-<version>.dmg` from the [Releases page](../../releases/latest), open it, and drag **SmarterThings** onto **Applications**.
 2. Open SmarterThings from Applications. It appears as a TV icon in the menu bar, with no Dock icon.
 
 The app is ad-hoc signed, not notarized by Apple, so the first launch on another Mac shows *"Apple could not verify SmarterThings…"*. To open it anyway, go to **System Settings › Privacy & Security** and click **Open Anyway** next to SmarterThings, or run:
@@ -33,6 +33,17 @@ make test    # run the tests
 ```
 
 Set the version with `make dmg VERSION=1.1.0`. Release builds are universal (Apple Silicon and Intel).
+
+## Releasing
+
+Releases are built by GitHub Actions (`.github/workflows/release.yml`). Push a version tag:
+
+```sh
+git tag v1.1.0
+git push origin v1.1.0
+```
+
+The workflow runs the tests on a macOS runner, builds `SmarterThings-1.1.0.dmg` with `make dmg`, and publishes a GitHub Release with the DMG, its `.sha256` file and auto-generated notes. The version comes from the tag, minus the leading `v`.
 
 ## How to use
 
