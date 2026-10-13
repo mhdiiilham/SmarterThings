@@ -46,61 +46,63 @@ struct LocalFirstTests {
     // MARK: PowerControl
 
     @Test func powerStateComesFromTheTVFirst() async {
-        let power = makePower(localState: false, cloud: Cloud(isOn: true))
+        let power = makePower(localState: .standby, cloud: Cloud(isOn: true))
         #expect(await power.isPoweredOn(cloudTV: cloudTV) == false)
     }
 
     @Test func unreachableTVWithoutTokenCountsAsOff() async {
-        #expect(await makePower(localState: nil).isPoweredOn(cloudTV: nil) == false)
+        #expect(await makePower(localState: .unreachable).isPoweredOn(cloudTV: nil) == false)
     }
 
     @Test func unreachableTVAsksTheCloud() async {
-        #expect(await makePower(localState: nil, cloud: Cloud(isOn: true)).isPoweredOn(cloudTV: cloudTV) == true)
-    }
-
-    @Test func turningOnWithoutTokenUsesWakeOnLAN() async throws {
-        let woke = Flag()
-        try await makePower(wake: { await woke.set() }).turnOn(cloudTV: nil)
-        #expect(await woke.isSet)
-    }
-
-    @Test func turningOnSucceedsIfTheCloudWorksWhenWakeOnLANCant() async throws {
-        let cloud = Cloud()
-        try await makePower(cloud: cloud, wake: { throw WakeOnLAN.Failure.invalidMACAddress }).turnOn(cloudTV: cloudTV)
-        #expect(await cloud.sent == [RemoteKey.powerOn.command])
-    }
-
-    @Test func turningOnFailsWhenNothingWorks() async {
-        let power = makePower(wake: { throw WakeOnLAN.Failure.invalidMACAddress })
-        await #expect(throws: WakeOnLAN.Failure.invalidMACAddress) { try await power.turnOn(cloudTV: nil) }
+        #expect(await makePower(localState: .unreachable, cloud: Cloud(isOn: true)).isPoweredOn(cloudTV: cloudTV) == true)
     }
 
     // MARK: Toggle decides from the TV's current state
 
     @Test func toggleTurnsOffATVThatIsOn() async throws {
         let presser = Presser(), woke = Flag()
-        let isOn = try await makePower(localState: true, presser: presser, wake: { await woke.set() }).toggle(cloudTV: nil)
+        let isOn = try await makePower(localState: .on, presser: presser, wake: { await woke.set() }).toggle(cloudTV: nil)
         #expect(isOn == false)
         #expect(await presser.pressed == [.powerOff])
         #expect(await !woke.isSet)
     }
 
-    @Test func toggleWakesATVInStandby() async throws {
+    @Test func toggleTurnsOnATVInStandbyWithThePowerKey() async throws {
         let presser = Presser(), woke = Flag()
-        let isOn = try await makePower(localState: false, presser: presser, wake: { await woke.set() }).toggle(cloudTV: nil)
+        let isOn = try await makePower(localState: .standby, presser: presser, wake: { await woke.set() }).toggle(cloudTV: nil)
         #expect(isOn == true)
-        #expect(await woke.isSet)
-        #expect(await presser.pressed.isEmpty)   // never KEY_POWER to a TV that's off
+        #expect(await presser.pressed == [.powerOff])   // KEY_POWER toggles: wakes from standby
+        #expect(await !woke.isSet)
     }
 
-    @Test func toggleWakesAnUnreachableTV() async throws {
-        let woke = Flag()
-        try await makePower(localState: nil, wake: { await woke.set() }).toggle(cloudTV: nil)
+    @Test func toggleWakesAnUnreachableTVWithWakeOnLAN() async throws {
+        let presser = Presser(), woke = Flag()
+        let isOn = try await makePower(localState: .unreachable, presser: presser, wake: { await woke.set() }).toggle(cloudTV: nil)
+        #expect(isOn == true)
         #expect(await woke.isSet)
+        #expect(await presser.pressed.isEmpty)
+    }
+
+    @Test func unreachableTVThatTheCloudSaysIsOnIsTurnedOffViaTheCloud() async throws {
+        let cloud = Cloud(isOn: true)
+        let isOn = try await makePower(localState: .unreachable, cloud: cloud).toggle(cloudTV: cloudTV)
+        #expect(isOn == false)
+        #expect(await cloud.sent == [RemoteKey.powerOff.command])
+    }
+
+    @Test func wakingFailsWithoutMACOrToken() async {
+        let power = makePower(localState: .unreachable, wake: { throw WakeOnLAN.Failure.invalidMACAddress })
+        await #expect(throws: WakeOnLAN.Failure.invalidMACAddress) { try await power.toggle(cloudTV: nil) }
+    }
+
+    @Test func wakingSucceedsWithATokenEvenWithoutMAC() async throws {
+        let power = makePower(localState: .unreachable, wake: { throw WakeOnLAN.Failure.invalidMACAddress })
+        #expect(try await power.toggle(cloudTV: cloudTV) == true)
     }
 
     private func makePower(
-        localState: Bool? = true,
+        localState: TVPowerState = .on,
         cloud: Cloud = Cloud(),
         presser: Presser = Presser(),
         wake: @escaping @Sendable () async throws -> Void = {}

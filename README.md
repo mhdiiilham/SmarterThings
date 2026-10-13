@@ -65,7 +65,7 @@ If you have several Samsung TVs, pick one from the Wi-Fi menu in the footer. You
 
 | Control | Notes |
 |---|---|
-| Power (top right) | Red means on. Off sends `KEY_POWER`; on sends Wake-on-LAN. Turning on needs **Settings › General › Network › Expert Settings › Power On with Mobile** enabled on the TV. |
+| Power (top right) | Red means on. Checks the TV's state on every click: on → off, standby → on (both with `KEY_POWER`, since a TV in standby still listens on Wi-Fi), no answer → Wake-on-LAN (needs **Power On with Mobile** on the TV) or SmartThings. |
 | D-pad, OK | Arrow keys, Return and Esc also work while the remote has focus. |
 | Back, Home, Menu, VOL / CH, Mute, ⏪ ▶ ⏸ ⏹ ⏩ | All go straight to the TV over Wi-Fi. |
 | Source (header) | Opens the TV's input menu. With SmartThings, it lists the inputs by name. |
@@ -139,7 +139,7 @@ The command shapes come from SmartThings' capability definitions (`GET /capabili
 3. **Connect (for typing).** A WebSocket to port 8002, with the app name base64-encoded in `name` and the saved pairing token in `token`. The TV replies `ms.channel.connect`; the first time, that reply includes the new token. The TV uses a self-signed certificate, which the app trusts only for the TV's own address. The TV drops idle connections, so a failed send reconnects once and retries.
 4. **Typing.** `ms.remote.control` with `TypeOfRemote: "SendInputString"` and base64 text, then `SendInputEnd` to apply it.
 5. **Keys.** `ms.remote.control` with `TypeOfRemote: "SendRemoteKey"`, `Cmd: "Click"` and a Samsung key code for every button (`KEY_UP`, `KEY_ENTER`, `KEY_RETURN`, `KEY_HOME`, `KEY_MENU`, `KEY_VOLUP`, `KEY_MUTE`, `KEY_CHUP`, `KEY_PLAY`, `KEY_FF`, `KEY_SOURCE`, `KEY_POWER`, …). `KeyDispatcher` opens the connection when the remote appears, pings it every 20 seconds, and shares one connection attempt between concurrent presses, so the TV only asks "Allow" once. With a SmartThings token, a press goes to the cloud when the connection isn't ready within 1.5 seconds, and local is skipped for 60 seconds after it fails.
-6. **Power.** `GET :8001/api/v2/` reports `PowerState`, and its `wifiMac` is remembered with the TV. Off: `KEY_POWER`, sent only when the TV reports it's on, since it's a toggle. On: a Wake-on-LAN magic packet (6×`FF` + 16× the MAC) to the broadcast address on UDP port 9, plus SmartThings `switch.on` when a token exists (`PowerControl`).
+6. **Power.** `GET :8001/api/v2/` reports `PowerState` (`on` or `standby`), and its `wifiMac` is remembered with the TV. `PowerControl` reads it on every click, since `KEY_POWER` is a toggle: `on` → `KEY_POWER` (off); `standby` → `KEY_POWER` (on, because the TV keeps listening on port 8002 in standby); no answer → a Wake-on-LAN magic packet (6×`FF` + 16× the MAC) to UDP port 9, plus SmartThings `switch.on` when a token exists.
 7. **Apps.** `POST :8001/api/v2/applications/<id>` opens an app, with SmartThings `custom.launchapp` as a fallback (`AppLauncher`).
 
 ### Bluetooth keyboard (classic Bluetooth HID)
@@ -185,7 +185,7 @@ The token folder is readable only by your user account (0700, with files 0600). 
 ## Limitations
 
 - **Works on your home network.** Without a SmartThings token, the remote needs the Mac and the TV on the same network. With a token, buttons, apps and search also work away from home, through the cloud.
-- **Power on needs a TV setting.** Wake-on-LAN only works with **Power On with Mobile** enabled on the TV. A TV on Wi-Fi may not wake from deep standby, in which case a SmartThings token gives a second way to turn it on.
+- **Power on from deep off.** A TV in normal standby turns on with the power key over Wi-Fi. If it doesn't answer at all (deep standby, after a long time off), only Wake-on-LAN (needs **Power On with Mobile** on the TV) or a SmartThings token can wake it. Wake-on-LAN didn't wake the 2025 test TV over Wi-Fi.
 - **Mute isn't read from the TV.** `KEY_MUTE` toggles, and the icon follows your presses, so it can drift if you use the physical remote.
 - **Some extras need SmartThings.** TV search and named inputs only exist in the cloud. Tokens expire after 24 hours, and the cloud allows 12 commands a minute per TV ([rate limits](https://developer.smartthings.com/docs/getting-started/rate-limits)). The remote itself never needs a token.
 - **Text typing only reaches Samsung's keyboard.** YouTube and Netflix ignore it; use the Bluetooth keyboard there.
@@ -209,7 +209,9 @@ The token folder is readable only by your user account (0700, with files 0600). 
 | 🔍 TV search (`custom.tvsearch`) | ✅ |
 | Other keys over Wi-Fi (Back, Home, Menu, CH, Mute, media, Source) | ❓ Not tested yet |
 | Opening apps over Wi-Fi (`POST /applications/<id>`) | ❓ Not tested yet |
-| Power on with Wake-on-LAN | ❓ Not tested yet |
+| Power state (`on` / `standby`) | ✅ |
+| Power on from standby with `KEY_POWER` | ❓ Not tested yet |
+| Power on with Wake-on-LAN | ❌ Didn't wake the test TV over Wi-Fi |
 
 The protocol messages, routing and fallbacks are covered by unit tests (`make test`). Rows marked ❓ still need a check against a real TV.
 

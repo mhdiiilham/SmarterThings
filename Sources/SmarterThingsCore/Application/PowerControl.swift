@@ -1,18 +1,19 @@
-/// Power without the cloud: the TV reports its own power state, `KEY_POWER` turns it off,
-/// and Wake-on-LAN turns it on. SmartThings, when available, fills in where the local
-/// network can't (state of an unreachable TV, a second way to turn it on).
+/// Power without the cloud. The TV reports its own state:
+/// - on: `KEY_POWER` turns it off
+/// - standby: it's still listening, so `KEY_POWER` turns it on
+/// - unreachable: Wake-on-LAN, plus SmartThings `switch.on` when a token exists
+/// `KEY_POWER` is a toggle, so every decision is made from a fresh reading.
 public struct PowerControl: Sendable {
     private let keys: KeyDispatcher
     private let cloud: TVController
-    private let localPowerState: @Sendable () async -> Bool?
+    private let localPowerState: @Sendable () async -> TVPowerState
     private let wake: @Sendable () async throws -> Void
 
-    /// `localPowerState`: `nil` when the TV doesn't answer. `wake`: sends Wake-on-LAN,
-    /// throwing if the TV's MAC address isn't known yet.
+    /// `wake` sends Wake-on-LAN, throwing if the TV's MAC address isn't known yet.
     public init(
         keys: KeyDispatcher,
         cloud: TVController,
-        localPowerState: @escaping @Sendable () async -> Bool?,
+        localPowerState: @escaping @Sendable () async -> TVPowerState,
         wake: @escaping @Sendable () async throws -> Void
     ) {
         self.keys = keys
@@ -23,43 +24,51 @@ public struct PowerControl: Sendable {
 
     /// `nil` when unknown. A TV that doesn't answer locally and has no cloud is treated as off.
     public func isPoweredOn(cloudTV: TV?) async -> Bool? {
-        if let isOn = await localPowerState() { return isOn }
-        guard let cloudTV else { return false }
-        return try? await cloud.isPoweredOn(cloudTV)
+        switch await localPowerState() {
+        case .on: return true
+        case .standby: return false
+        case .unreachable:
+            guard let cloudTV else { return false }
+            return try? await cloud.isPoweredOn(cloudTV)
+        }
     }
 
-    /// Decides from a fresh reading, never a cached one: `KEY_POWER` is a toggle, so acting on
-    /// a stale "on" would send it to a TV that's already off. Returns the new power state.
+    /// Returns the new power state.
     @discardableResult
     public func toggle(cloudTV: TV?) async throws -> Bool {
-        if await isPoweredOn(cloudTV: cloudTV) == true {
-            try await turnOff(cloudTV: cloudTV)
+        switch await localPowerState() {
+        case .on:
+            try await pressPowerKey()
             return false
+        case .standby:
+            try await pressPowerKey()
+            return true
+        case .unreachable:
+            if let cloudTV, (try? await cloud.isPoweredOn(cloudTV)) == true {
+                try await cloud.send(RemoteKey.powerOff.command, to: cloudTV)
+                return false
+            }
+            try await wakeFromDeepStandby(cloudTV: cloudTV)
+            return true
         }
-        try await turnOn(cloudTV: cloudTV)
-        return true
     }
 
-    public func turnOff(cloudTV: TV?) async throws {
-        try await keys.press(.powerOff, on: cloudTV)
+    /// `KEY_POWER` over the local connection only: a cloud fallback would send an explicit
+    /// on/off command, which isn't what a toggle means.
+    private func pressPowerKey() async throws {
+        try await keys.press(.powerOff, on: nil)
     }
 
-    /// Wakes the TV locally and, when possible, also asks SmartThings; succeeds if either does.
-    public func turnOn(cloudTV: TV?) async throws {
-        var wakeError: Error?
+    /// Wake-on-LAN, and SmartThings in the background when available; succeeds if either can.
+    private func wakeFromDeepStandby(cloudTV: TV?) async throws {
+        if let cloudTV {
+            let cloud = cloud
+            Task { try? await cloud.send(RemoteKey.powerOn.command, to: cloudTV) }
+        }
         do {
             try await wake()
         } catch {
-            wakeError = error
-        }
-        guard let cloudTV else {
-            if let wakeError { throw wakeError }
-            return
-        }
-        do {
-            try await cloud.send(RemoteKey.powerOn.command, to: cloudTV)
-        } catch {
-            if wakeError != nil { throw error }
+            guard cloudTV != nil else { throw error }
         }
     }
 }

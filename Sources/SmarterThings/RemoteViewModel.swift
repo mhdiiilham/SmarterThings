@@ -156,20 +156,21 @@ final class RemoteViewModel {
     }
 
     /// Asks the TV for its current state first (the icon may be stale, e.g. after using the
-    /// physical remote), then turns it off with `KEY_POWER` or on with Wake-on-LAN.
-    /// The TV takes a few seconds to change, so the state is read again afterwards.
+    /// physical remote), then toggles it (see `PowerControl`). The spinner covers only the
+    /// command; the TV takes a few seconds to change, so the state is read again later.
     func togglePower() {
         guard !isChangingPower else { return }
         isChangingPower = true
         let tv = cloudTV
         Task {
-            defer { isChangingPower = false }
             do {
                 isPoweredOn = try await power.toggle(cloudTV: tv)
             } catch {
                 showCommandFailure(error)
             }
+            isChangingPower = false
             try? await Task.sleep(for: .seconds(6))
+            guard !isChangingPower else { return }
             isPoweredOn = await power.isPoweredOn(cloudTV: cloudTV)
         }
     }

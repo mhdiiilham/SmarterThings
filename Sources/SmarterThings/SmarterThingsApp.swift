@@ -38,8 +38,8 @@ struct SmarterThingsApp: App {
             keys: keyDispatcher,
             cloud: controller,
             localPowerState: {
-                guard let host = try? await hostFinder.host() else { return nil }
-                return await LocalTVDiscovery.isPoweredOn(host: host)
+                guard let host = try? await hostFinder.host() else { return .unreachable }
+                return await LocalTVDiscovery.powerState(host: host)
             },
             wake: {
                 guard let mac = await localTVs.activeDevice?.macAddress else {

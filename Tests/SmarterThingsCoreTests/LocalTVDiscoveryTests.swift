@@ -20,15 +20,16 @@ struct LocalTVDiscoveryTests {
         #expect(LocalTVDiscovery.parseDeviceInfo(Data(info.utf8), host: "10.0.0.2")?.macAddress == "CC:20:AC:5E:4A:E1")
     }
 
-    @Test(arguments: [("on", true), ("standby", false), ("Off", false)])
-    func readsPowerState(state: String, isOn: Bool) {
+    @Test(arguments: [("on", TVPowerState.on), ("standby", .standby), ("Off", .standby)])
+    func readsPowerState(state: String, expected: TVPowerState) {
+        // "standby" captured from a 2025 Crystal UHD turned off with its remote.
         let info = #"{"device": {"id": "uuid:1", "name": "TV", "type": "Samsung SmartTV", "PowerState": "\#(state)"}}"#
-        #expect(LocalTVDiscovery.parsePowerState(Data(info.utf8)) == isOn)
+        #expect(LocalTVDiscovery.parsePowerState(Data(info.utf8)) == expected)
     }
 
     @Test func answeringWithoutPowerStateMeansOn() {
         let info = #"{"device": {"id": "uuid:1", "name": "TV", "type": "Samsung SmartTV"}}"#
-        #expect(LocalTVDiscovery.parsePowerState(Data(info.utf8)) == true)
+        #expect(LocalTVDiscovery.parsePowerState(Data(info.utf8)) == .on)
     }
 
     @Test func rejectsNonTVDevices() {

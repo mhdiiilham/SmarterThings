@@ -27,20 +27,22 @@ public enum LocalTVDiscovery {
         )
     }
 
-    /// Whether the TV at `host` reports `PowerState: "on"`. `nil` when it doesn't answer
-    /// (in deep standby, unplugged, or not on this network).
-    public static func isPoweredOn(host: String, transport: HTTPTransport = URLSession.shared) async -> Bool? {
-        guard let url = URL(string: "http://\(host):8001/api/v2/") else { return nil }
+    /// What the TV at `host` reports: `on`, `standby` (screen off, still listening), or
+    /// `unreachable` when it doesn't answer.
+    public static func powerState(host: String, transport: HTTPTransport = URLSession.shared) async -> TVPowerState {
+        guard let url = URL(string: "http://\(host):8001/api/v2/") else { return .unreachable }
         var request = URLRequest(url: url)
         request.timeoutInterval = 2
-        guard let (data, response) = try? await transport.send(request), response.statusCode == 200 else { return nil }
+        guard let (data, response) = try? await transport.send(request), response.statusCode == 200 else {
+            return .unreachable
+        }
         return parsePowerState(data)
     }
 
-    static func parsePowerState(_ data: Data) -> Bool? {
-        guard let info = try? JSONDecoder().decode(DeviceInfo.self, from: data) else { return nil }
+    static func parsePowerState(_ data: Data) -> TVPowerState {
+        guard let info = try? JSONDecoder().decode(DeviceInfo.self, from: data) else { return .unreachable }
         // Older firmware has no PowerState; answering at all means it's on.
-        return (info.device.PowerState ?? "on").lowercased() == "on"
+        return (info.device.PowerState ?? "on").lowercased() == "on" ? .on : .standby
     }
 
     private static func device(at host: String, transport: HTTPTransport) async -> LocalTVDevice? {
