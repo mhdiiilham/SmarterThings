@@ -115,6 +115,7 @@ final class KeyboardViewModel {
     }
 
     private func stopTyping() {
+        keyboard.releaseAllKeys()
         if let keyMonitor { NSEvent.removeMonitor(keyMonitor) }
         keyMonitor = nil
         isTyping = false

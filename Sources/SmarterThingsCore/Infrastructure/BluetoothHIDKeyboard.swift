@@ -28,6 +28,14 @@ public final class BluetoothHIDKeyboard: NSObject, KeystrokeSender {
     private var device: IOBluetoothDevice?
     private var controlChannel: IOBluetoothL2CAPChannel?
     private var interruptChannel: IOBluetoothL2CAPChannel?
+    /// Key reports wait here so they go out strictly in order, one write at a time.
+    private var reportQueue = HIDReportQueue()
+    /// The in-flight report's bytes. `writeAsync` reads them after returning, so they must
+    /// stay allocated until `l2capChannelWriteComplete` (freeing them early dropped key-ups,
+    /// which made the TV auto-repeat the key).
+    private var inFlightBuffer: UnsafeMutableRawPointer?
+    private var releaseRetries = 0
+    private let maxReleaseRetries = 3
     // Pending async opens, resumed from IOBluetooth's callbacks on the main run loop.
     private var connectionContinuation: CheckedContinuation<Void, Error>?
     private var channelContinuations: [ObjectIdentifier: CheckedContinuation<Void, Error>] = [:]
@@ -68,6 +76,8 @@ public final class BluetoothHIDKeyboard: NSObject, KeystrokeSender {
     }
 
     public func disconnect() {
+        reportQueue.reset()
+        freeInFlightBuffer()
         interruptChannel?.close()
         controlChannel?.close()
         interruptChannel = nil
@@ -79,8 +89,55 @@ public final class BluetoothHIDKeyboard: NSObject, KeystrokeSender {
 
     /// Presses and releases one key.
     public func send(_ stroke: HIDKeyStroke) async throws {
-        try write(HIDKeyboardProtocol.inputReport(stroke), on: interruptChannel)
-        try write(HIDKeyboardProtocol.inputReport(nil), on: interruptChannel)
+        guard interruptChannel != nil else { throw Failure.notConnected }
+        enqueue(HIDKeyboardProtocol.inputReport(stroke))
+        enqueue(HIDKeyboardProtocol.inputReport(nil))
+    }
+
+    /// Sends a key-up for everything, e.g. when typing stops, so no key is left held.
+    public func releaseAllKeys() {
+        guard interruptChannel != nil else { return }
+        enqueue(HIDKeyboardProtocol.inputReport(nil))
+    }
+
+    private func enqueue(_ report: [UInt8]) {
+        if let now = reportQueue.enqueue(report) { startWrite(now) }
+    }
+
+    private func startWrite(_ report: [UInt8]) {
+        guard let channel = interruptChannel else {
+            reportQueue.reset()
+            return
+        }
+        let buffer = UnsafeMutableRawPointer.allocate(byteCount: report.count, alignment: 1)
+        buffer.copyMemory(from: report, byteCount: report.count)
+        inFlightBuffer = buffer
+        let result = channel.writeAsync(buffer, length: UInt16(report.count), refcon: nil)
+        if result != kIOReturnSuccess {
+            finishWrite(status: result)
+        }
+    }
+
+    /// Frees the finished report and starts the next. Every press is already followed by a
+    /// queued release, so a key can only stick if a release fails; that one is retried.
+    private func finishWrite(status: IOReturn) {
+        freeInFlightBuffer()
+        let finished = reportQueue.inFlight
+        if status != kIOReturnSuccess {
+            bluetoothLog.error("key report write failed: 0x\(String(UInt32(bitPattern: status), radix: 16), privacy: .public)")
+            if let finished, finished == HIDKeyboardProtocol.inputReport(nil), releaseRetries < maxReleaseRetries {
+                releaseRetries += 1
+                startWrite(finished)
+                return
+            }
+        }
+        releaseRetries = 0
+        if let next = reportQueue.completeInFlight() { startWrite(next) }
+    }
+
+    private func freeInFlightBuffer() {
+        inFlightBuffer?.deallocate()
+        inFlightBuffer = nil
     }
 
     private func publishServiceRecordIfNeeded() throws {
@@ -136,13 +193,16 @@ public final class BluetoothHIDKeyboard: NSObject, KeystrokeSender {
 
     /// `writeAsync` copies the bytes into IOBluetooth's buffer and returns at once, so typing
     /// never waits on the radio (`writeSync` blocked the main thread until each report was sent).
-    private func write(_ bytes: [UInt8], on channel: IOBluetoothL2CAPChannel?) throws {
-        guard let channel else { throw Failure.notConnected }
+    /// Control-channel replies are rare and short, so a synchronous write is fine here.
+    private func writeControlReply(_ bytes: [UInt8]) {
+        guard let channel = controlChannel else { return }
         var buffer = bytes
         let result = buffer.withUnsafeMutableBytes { pointer in
-            channel.writeAsync(pointer.baseAddress, length: UInt16(pointer.count), refcon: nil)
+            channel.writeSync(pointer.baseAddress, length: UInt16(pointer.count))
         }
-        guard result == kIOReturnSuccess else { throw Failure.writeFailed(result) }
+        if result != kIOReturnSuccess {
+            bluetoothLog.error("control reply failed: 0x\(String(UInt32(bitPattern: result), radix: 16), privacy: .public)")
+        }
     }
 
     deinit {
@@ -165,6 +225,19 @@ extension BluetoothHIDKeyboard: IOBluetoothL2CAPChannelDelegate {
             } else {
                 continuation?.resume(throwing: Failure.connectionFailed(status))
             }
+        }
+    }
+
+    /// The previous `writeAsync` finished; its buffer can be freed and the next report sent.
+    nonisolated public func l2capChannelWriteComplete(
+        _ l2capChannel: IOBluetoothL2CAPChannel!,
+        refcon: UnsafeMutableRawPointer!,
+        status error: IOReturn
+    ) {
+        let channelID = ObjectIdentifier(l2capChannel)
+        MainActor.assumeIsolated {
+            guard channelID == interruptChannel.map(ObjectIdentifier.init) else { return }
+            finishWrite(status: error)
         }
     }
 
@@ -191,7 +264,7 @@ extension BluetoothHIDKeyboard: IOBluetoothL2CAPChannelDelegate {
         MainActor.assumeIsolated {
             guard channelID == controlChannel.map(ObjectIdentifier.init),
                   let reply = HIDKeyboardProtocol.controlReply(to: message) else { return }
-            try? write(reply, on: controlChannel)
+            writeControlReply(reply)
         }
     }
 
