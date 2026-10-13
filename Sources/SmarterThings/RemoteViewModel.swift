@@ -19,9 +19,12 @@ final class RemoteViewModel {
     /// `nil` until SmartThings reports the TV's switch state.
     private(set) var isPoweredOn: Bool?
     private(set) var selectedTV: TV?
+    /// Short-lived message about a failed command; the remote stays usable.
+    private(set) var notice: String?
 
     private let controller: TVController
     private let tokenStore: TokenStore
+    private var noticeDismissal: Task<Void, Never>?
 
     init(controller: TVController, tokenStore: TokenStore) {
         self.controller = controller
@@ -41,6 +44,16 @@ final class RemoteViewModel {
             await loadSelectedTVState()
         } catch {
             show(error)
+        }
+    }
+
+    /// For reopening the popover: reload everything only the first time, otherwise just
+    /// re-read the TV's state. SmartThings rate-limits, so this avoids needless calls.
+    func loadIfNeeded() async {
+        if status == .ready, selectedTV != nil {
+            await loadSelectedTVState()
+        } else {
+            await load()
         }
     }
 
@@ -71,14 +84,19 @@ final class RemoteViewModel {
 
     /// When the state is unknown, turn on: harmless if the TV is already on.
     func togglePower() {
-        let isTurningOff = isPoweredOn == true
+        let wasPoweredOn = isPoweredOn
+        let isTurningOff = wasPoweredOn == true
         isPoweredOn = !isTurningOff
-        press(isTurningOff ? .powerOff : .powerOn)
+        send(isTurningOff ? RemoteKey.powerOff.command : RemoteKey.powerOn.command) { [weak self] in
+            self?.isPoweredOn = wasPoweredOn
+        }
     }
 
     func toggleMute() {
         isMuted.toggle()
-        press(isMuted ? .mute : .unmute)
+        send(isMuted ? RemoteKey.mute.command : RemoteKey.unmute.command) { [weak self] in
+            self?.isMuted.toggle()
+        }
     }
 
     func selectInput(_ source: InputSource) {
@@ -103,15 +121,45 @@ final class RemoteViewModel {
         selectedTV?.supports(key) ?? false
     }
 
-    private func send(_ command: TVCommand) {
+    /// `undo` reverts an optimistic UI change (power, mute) when the command fails.
+    private func send(_ command: TVCommand, undo: (() -> Void)? = nil) {
         guard let tv = selectedTV else { return }
         Task {
             do {
                 try await controller.send(command, to: tv)
             } catch {
-                show(error)
+                undo?()
+                showCommandFailure(error)
             }
         }
+    }
+
+    private func showCommandFailure(_ error: Error) {
+        switch error {
+        case RemoteError.missingToken, RemoteError.tokenExpired:
+            show(error)
+        case RemoteError.rateLimited(let retryAfter):
+            showNotice(Self.rateLimitMessage(retryAfter), for: .seconds(min(retryAfter ?? 5, 15)))
+        case RemoteError.requestFailed(let statusCode):
+            showNotice("Command failed (SmartThings HTTP \(statusCode)).", for: .seconds(4))
+        default:
+            showNotice(error.localizedDescription, for: .seconds(4))
+        }
+    }
+
+    private func showNotice(_ message: String, for duration: Duration) {
+        notice = message
+        noticeDismissal?.cancel()
+        noticeDismissal = Task { [weak self] in
+            try? await Task.sleep(for: duration)
+            guard !Task.isCancelled else { return }
+            self?.notice = nil
+        }
+    }
+
+    private static func rateLimitMessage(_ retryAfter: Int?) -> String {
+        let wait = retryAfter.map { "in \($0)s" } ?? "in a moment"
+        return "SmartThings allows 12 commands a minute per TV. Try again \(wait)."
     }
 
     private func loadSelectedTVState() async {
@@ -132,6 +180,8 @@ final class RemoteViewModel {
             status = .needsToken(reason: nil)
         case RemoteError.tokenExpired:
             status = .needsToken(reason: "Your token expired or was revoked. Paste a new one.")
+        case RemoteError.rateLimited(let retryAfter):
+            status = .failed(Self.rateLimitMessage(retryAfter))
         case RemoteError.requestFailed(let statusCode):
             status = .failed("SmartThings returned HTTP \(statusCode).")
         default:

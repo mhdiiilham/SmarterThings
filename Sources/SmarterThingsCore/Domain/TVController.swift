@@ -9,5 +9,7 @@ public protocol TVController: Sendable {
 public enum RemoteError: Error, Equatable {
     case missingToken
     case tokenExpired
+    /// SmartThings allows 12 commands per minute per device; `retryAfter` is in seconds.
+    case rateLimited(retryAfter: Int?)
     case requestFailed(status: Int)
 }

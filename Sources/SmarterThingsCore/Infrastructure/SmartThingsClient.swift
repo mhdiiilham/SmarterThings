@@ -57,8 +57,16 @@ public struct SmartThingsClient: TVController {
         switch response.statusCode {
         case 200..<300: return data
         case 401: throw RemoteError.tokenExpired
+        case 429: throw RemoteError.rateLimited(retryAfter: Self.secondsUntilReset(response))
         default: throw RemoteError.requestFailed(status: response.statusCode)
         }
+    }
+
+    /// `x-ratelimit-reset` is the time left in the window, in milliseconds.
+    private static func secondsUntilReset(_ response: HTTPURLResponse) -> Int? {
+        guard let header = response.value(forHTTPHeaderField: "x-ratelimit-reset"),
+              let milliseconds = Double(header) else { return nil }
+        return max(1, Int((milliseconds / 1000).rounded(.up)))
     }
 }
 

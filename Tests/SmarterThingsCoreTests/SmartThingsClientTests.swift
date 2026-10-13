@@ -61,6 +61,21 @@ struct SmartThingsClientTests {
         await #expect(throws: RemoteError.tokenExpired) { try await client.televisions() }
     }
 
+    @Test func tooManyRequestsReportsSecondsUntilReset() async {
+        let transport = FakeTransport(responses: [(429, "")], headers: ["x-ratelimit-reset": "41200"])
+        let client = makeClient(transport)
+        await #expect(throws: RemoteError.rateLimited(retryAfter: 42)) {
+            try await client.send(RemoteKey.up.command, to: tv)
+        }
+    }
+
+    @Test func tooManyRequestsWithoutResetHeader() async {
+        let client = makeClient(FakeTransport(responses: [(429, "")]))
+        await #expect(throws: RemoteError.rateLimited(retryAfter: nil)) {
+            try await client.send(RemoteKey.up.command, to: tv)
+        }
+    }
+
     @Test func otherFailuresReportStatus() async {
         let client = makeClient(FakeTransport(responses: [(500, "")]))
         await #expect(throws: RemoteError.requestFailed(status: 500)) { try await client.send(RemoteKey.ok.command, to: tv) }
@@ -82,16 +97,18 @@ struct SmartThingsClientTests {
 
 final class FakeTransport: HTTPTransport, @unchecked Sendable {
     private var responses: [(Int, String)]
+    private let headers: [String: String]
     private(set) var requests: [URLRequest] = []
 
-    init(responses: [(Int, String)]) {
+    init(responses: [(Int, String)], headers: [String: String] = [:]) {
         self.responses = responses
+        self.headers = headers
     }
 
     func send(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
         requests.append(request)
         let (status, body) = responses.removeFirst()
-        let response = HTTPURLResponse(url: request.url!, statusCode: status, httpVersion: nil, headerFields: nil)!
+        let response = HTTPURLResponse(url: request.url!, statusCode: status, httpVersion: nil, headerFields: headers)!
         return (Data(body.utf8), response)
     }
 }

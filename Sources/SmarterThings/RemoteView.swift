@@ -19,7 +19,7 @@ struct RemoteView: View {
                 .padding(.vertical, 8)
         }
         .frame(width: model.status == .ready ? 724 : 300)
-        .task { await model.load() }
+        .task { await model.loadIfNeeded() }
         .task { await localTVs.searchIfNeeded() }
     }
 
@@ -41,6 +41,8 @@ struct RemoteView: View {
     private var remote: some View {
         VStack(spacing: 16) {
             header
+                .overlay(alignment: .center) { noticeBanner }
+                .animation(.easeOut(duration: 0.2), value: model.notice)
             HStack(alignment: .top, spacing: 0) {
                 GlassEffectContainer { buttons }
                 Divider().padding(.horizontal, 18)
@@ -99,6 +101,20 @@ struct RemoteView: View {
         .onKeyPress(.rightArrow) { model.press(.right); return .handled }
         .onKeyPress(.return) { model.press(.ok); return .handled }
         .onKeyPress(.escape) { model.press(.back); return .handled }
+    }
+
+    /// Floats over the header so a failed command doesn't shift the layout.
+    @ViewBuilder
+    private var noticeBanner: some View {
+        if let notice = model.notice {
+            Label(notice, systemImage: "exclamationmark.triangle.fill")
+                .font(.system(size: 11, weight: .medium))
+                .symbolRenderingMode(.multicolor)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .glassSurface(in: Capsule())
+                .transition(.opacity.combined(with: .move(edge: .top)))
+        }
     }
 
     private var header: some View {

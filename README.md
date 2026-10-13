@@ -152,6 +152,7 @@ The token folder is readable only by your user account (0700, with files 0600). 
 
 ## Limitations
 
+- **SmartThings allows 12 commands per minute per TV.** Fast D-pad or volume presses can hit this. The app then shows a short notice with the seconds until the limit resets, from the `x-ratelimit-reset` header, and the remote stays usable. See [SmartThings rate limits](https://developer.smartthings.com/docs/getting-started/rate-limits).
 - **SmartThings tokens expire after 24 hours.** Personal Access Tokens created since late 2024 are short-lived. When one expires, the remote asks for a new one. A long-lived connection would need SmartThings OAuth through a registered SmartApp, which this app doesn't implement.
 - **Power on depends on the TV.** Turning the TV on from the cloud only works if network standby is enabled on the TV. Turning it off always works.
 - **Power and mute state can drift.** Power is re-read each time you open the remote. Mute state is only tracked locally, so it can get out of sync if you use the physical remote.
