@@ -5,6 +5,7 @@ import TVRemoteCore
 struct TVRemoteApp: App {
     private let model: RemoteViewModel
     private let typing: TypingViewModel
+    private let shortcuts: AppShortcutsViewModel
 
     init() {
         let tokenStore = FileTokenStore(name: "smartthings-token")
@@ -14,16 +15,17 @@ struct TVRemoteApp: App {
         let hostFinder = TVHostFinder(manualHost: {
             UserDefaults.standard.string(forKey: TypingViewModel.manualHostKey)
         })
-        let keyboard = LocalTVKeyboard(
+        let localTV = LocalTVRemote(
             hostFinder: hostFinder,
             tokenStore: FileTokenStore(name: "local-tv-token")
         )
-        typing = TypingViewModel(keyboard: keyboard)
+        typing = TypingViewModel(keyboard: localTV)
+        shortcuts = AppShortcutsViewModel(launcher: localTV)
     }
 
     var body: some Scene {
         MenuBarExtra("TV Remote", systemImage: "tv") {
-            RemoteView(model: model, typing: typing)
+            RemoteView(model: model, typing: typing, shortcuts: shortcuts)
         }
         .menuBarExtraStyle(.window)
     }

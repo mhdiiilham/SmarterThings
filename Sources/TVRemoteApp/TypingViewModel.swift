@@ -45,19 +45,19 @@ final class TypingViewModel {
 
     private static func failure(for error: Error) -> Status {
         switch error {
-        case KeyboardError.tvNotFound:
+        case LocalTVError.tvNotFound:
             .failed(
                 "Couldn't reach the TV on this network. Check Local Network access for TV Remote "
                     + "in System Settings › Privacy & Security, or enter the TV's IP address.",
                 canEnterAddress: true
             )
-        case KeyboardError.accessDenied:
+        case LocalTVError.accessDenied:
             .failed(
                 "The TV blocked this Mac. On the TV, open Settings › General › External Device Manager "
                     + "› Device Connection Manager and allow \"TV Remote (Mac)\".",
                 canEnterAddress: false
             )
-        case KeyboardError.noResponse:
+        case LocalTVError.noResponse:
             .failed("The TV didn't answer. If it asked to allow this Mac, choose Allow and try again.",
                     canEnterAddress: true)
         default:

@@ -1,41 +1,64 @@
 import Foundation
 
-/// Types text on the TV over its local remote WebSocket (wss, port 8002).
+/// Talks to the TV directly over its local remote WebSocket (wss, port 8002):
+/// typing text and listing/opening apps, which the SmartThings cloud can't do.
 /// The first connection makes the TV ask "Allow?"; the token it then sends is reused.
-public actor LocalTVKeyboard: TVKeyboard {
+public actor LocalTVRemote: TVKeyboard, TVAppLauncher {
     private let hostFinder: TVHostFinder
     private let tokenStore: TokenStore
     private let appName: String
     private let approvalTimeout: Duration
+    private let replyTimeout: Duration
     private var socket: URLSessionWebSocketTask?
 
     public init(
         hostFinder: TVHostFinder,
         tokenStore: TokenStore,
         appName: String = "TV Remote (Mac)",
-        approvalTimeout: Duration = .seconds(30)
+        approvalTimeout: Duration = .seconds(30),
+        replyTimeout: Duration = .seconds(5)
     ) {
         self.hostFinder = hostFinder
         self.tokenStore = tokenStore
         self.appName = appName
         self.approvalTimeout = approvalTimeout
+        self.replyTimeout = replyTimeout
     }
 
     public func type(_ text: String) async throws {
-        do {
-            try await send(text, over: connectedSocket())
-        } catch let error as KeyboardError {
-            throw error
-        } catch {
-            // The TV drops idle connections; reconnect once before giving up.
-            socket = nil
-            try await send(text, over: connectedSocket())
+        try await withSocket { socket in
+            try await socket.send(.string(LocalRemoteProtocol.textMessage(text)))
+            try await socket.send(.string(LocalRemoteProtocol.inputEndMessage))
         }
     }
 
-    private func send(_ text: String, over socket: URLSessionWebSocketTask) async throws {
-        try await socket.send(.string(LocalRemoteProtocol.textMessage(text)))
-        try await socket.send(.string(LocalRemoteProtocol.inputEndMessage))
+    public func installedApps() async throws -> [TVApp] {
+        let timeout = replyTimeout
+        return try await withSocket { socket in
+            try await socket.send(.string(LocalRemoteProtocol.installedAppsRequest))
+            return try await Self.firstMatch(on: socket, timeout: timeout, LocalRemoteProtocol.parseInstalledApps)
+        }
+    }
+
+    public func launch(_ app: TVApp) async throws {
+        try await withSocket { socket in
+            try await socket.send(.string(LocalRemoteProtocol.launchMessage(app)))
+        }
+    }
+
+    /// Runs `operation` on the open connection. The TV drops idle connections,
+    /// so a transport failure gets one retry on a fresh connection.
+    private func withSocket<Result: Sendable>(
+        _ operation: @Sendable (URLSessionWebSocketTask) async throws -> Result
+    ) async throws -> Result {
+        do {
+            return try await operation(connectedSocket())
+        } catch let error as LocalTVError {
+            throw error
+        } catch {
+            socket = nil
+            return try await operation(connectedSocket())
+        }
     }
 
     private func connectedSocket() async throws -> URLSessionWebSocketTask {
@@ -48,43 +71,46 @@ public actor LocalTVKeyboard: TVKeyboard {
         newSocket.resume()
 
         do {
-            switch try await firstEvent(on: newSocket) {
+            let event = try await Self.firstMatch(on: newSocket, timeout: approvalTimeout) { message in
+                let event = LocalRemoteProtocol.parseEvent(message)
+                return event == .other ? nil : event
+            }
+            switch event {
             case .connected(let token):
                 if let token { try? tokenStore.save(token) }
                 socket = newSocket
                 return newSocket
-            case .unauthorized:
+            case .unauthorized, .other:
                 newSocket.cancel()
-                throw KeyboardError.accessDenied
-            case .other:
-                newSocket.cancel()
-                throw KeyboardError.noResponse
+                throw LocalTVError.accessDenied
             }
-        } catch let error as KeyboardError {
+        } catch let error as LocalTVError {
             throw error
         } catch {
             newSocket.cancel()
             await hostFinder.forgetDiscoveredHost()
-            throw KeyboardError.tvNotFound
+            throw LocalTVError.tvNotFound
         }
     }
 
-    /// Waits for the connect/unauthorized event, giving the user time to click Allow on the TV.
-    private func firstEvent(on socket: URLSessionWebSocketTask) async throws -> LocalRemoteProtocol.Event {
-        let timeout = approvalTimeout
-        return try await withThrowingTaskGroup(of: LocalRemoteProtocol.Event.self) { group in
+    /// Reads messages until `parse` recognizes one, or fails with `noResponse` after `timeout`.
+    private static func firstMatch<Value: Sendable>(
+        on socket: URLSessionWebSocketTask,
+        timeout: Duration,
+        _ parse: @escaping @Sendable (String) -> Value?
+    ) async throws -> Value {
+        try await withThrowingTaskGroup(of: Value.self) { group in
             group.addTask {
                 while true {
                     guard case .string(let message) = try await socket.receive() else { continue }
-                    let event = LocalRemoteProtocol.parseEvent(message)
-                    if event != .other { return event }
+                    if let value = parse(message) { return value }
                 }
             }
             group.addTask {
                 try await Task.sleep(for: timeout)
                 // receive() ignores task cancellation; closing the socket is what unblocks it.
                 socket.cancel(with: .goingAway, reason: nil)
-                throw KeyboardError.noResponse
+                throw LocalTVError.noResponse
             }
             defer { group.cancelAll() }
             return try await group.next()!

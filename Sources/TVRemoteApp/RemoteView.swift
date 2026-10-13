@@ -4,6 +4,7 @@ import TVRemoteCore
 struct RemoteView: View {
     let model: RemoteViewModel
     let typing: TypingViewModel
+    let shortcuts: AppShortcutsViewModel
 
     var body: some View {
         VStack(spacing: 0) {
@@ -37,6 +38,7 @@ struct RemoteView: View {
     private var remote: some View {
         VStack(spacing: 18) {
             buttons
+            AppShortcutsSection(model: shortcuts)
             TypeOnTVField(model: typing)
         }
     }

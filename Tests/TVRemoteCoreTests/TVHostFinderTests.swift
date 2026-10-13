@@ -14,6 +14,6 @@ struct TVHostFinderTests {
 
     @Test func throwsWhenNothingIsFound() async {
         let finder = TVHostFinder(manualHost: { "" }, discover: { [] })
-        await #expect(throws: KeyboardError.tvNotFound) { try await finder.host() }
+        await #expect(throws: LocalTVError.tvNotFound) { try await finder.host() }
     }
 }

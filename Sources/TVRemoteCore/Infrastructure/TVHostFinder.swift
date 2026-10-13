@@ -15,7 +15,7 @@ public actor TVHostFinder {
     public func host() async throws -> String {
         if let manual = manualHost(), !manual.isEmpty { return manual }
         if let discoveredHost { return discoveredHost }
-        guard let found = await discover().first else { throw KeyboardError.tvNotFound }
+        guard let found = await discover().first else { throw LocalTVError.tvNotFound }
         discoveredHost = found
         return found
     }

@@ -62,6 +62,7 @@ public enum SSDPDiscovery {
         guard received > 0 else { return nil }
         var hostBuffer = [CChar](repeating: 0, count: Int(INET_ADDRSTRLEN))
         inet_ntop(AF_INET, &sender.sin_addr, &hostBuffer, socklen_t(INET_ADDRSTRLEN))
-        return String(cString: hostBuffer)
+        let hostBytes = hostBuffer.prefix { $0 != 0 }.map { UInt8(bitPattern: $0) }
+        return String(decoding: hostBytes, as: UTF8.self)
     }
 }

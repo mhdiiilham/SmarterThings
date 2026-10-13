@@ -3,7 +3,8 @@ public protocol TVKeyboard: Sendable {
     func type(_ text: String) async throws
 }
 
-public enum KeyboardError: Error, Equatable {
+/// Failures of the direct (local network) connection to the TV.
+public enum LocalTVError: Error, Equatable {
     case tvNotFound
     case accessDenied
     case noResponse
