@@ -12,7 +12,7 @@ struct DirectionPad: View {
 
     var body: some View {
         ZStack {
-            Circle().fill(.quaternary)
+            Circle().glassSurface(in: Circle())
             ForEach(Direction.allCases, id: \.self) { direction in
                 Button { onPress(direction.key) } label: {
                     Image(systemName: direction.symbol)
@@ -27,8 +27,7 @@ struct DirectionPad: View {
                 Text("OK").font(.system(size: 15, weight: .bold, design: .rounded))
                     .frame(width: okDiameter, height: okDiameter)
             }
-            .buttonStyle(PressableStyle(shape: Circle(), fill: .tint, pressedFill: .tint, foreground: .white))
-            .shadow(color: .black.opacity(0.25), radius: 4, y: 2)
+            .buttonStyle(GlassSurfaceButtonStyle(shape: Circle(), tint: .accentColor, foreground: .white))
             .help("OK (Return)")
         }
         .frame(width: diameter, height: diameter)
@@ -109,7 +108,7 @@ struct Rocker: View {
             half(.minus, key: downKey, help: "\(title) down")
         }
         .frame(width: 54, height: 124)
-        .background(Capsule().fill(.quaternary))
+        .glassSurface(in: Capsule())
     }
 
     private enum Sign: String { case plus, minus }
@@ -120,7 +119,7 @@ struct Rocker: View {
                 .font(.system(size: 15, weight: .semibold))
                 .frame(width: 54, height: 50)
         }
-        .buttonStyle(PressableStyle(shape: Capsule(), fill: .clear, pressedFill: .tertiary))
+        .buttonStyle(HighlightButtonStyle(shape: Capsule()))
         .help(help)
     }
 }
@@ -141,7 +140,7 @@ struct LabeledIconButton: View {
                     .font(.system(size: size * 0.36, weight: .medium))
                     .frame(width: size, height: size)
             }
-            .buttonStyle(PressableStyle(shape: Circle(), fill: .quaternary))
+            .buttonStyle(GlassSurfaceButtonStyle(shape: Circle()))
             .help(title)
             Text(title)
                 .font(.system(size: 10, weight: .medium))
@@ -171,40 +170,11 @@ struct MediaBar: View {
                         .font(.system(size: 13, weight: .semibold))
                         .frame(maxWidth: .infinity, minHeight: 38)
                 }
-                .buttonStyle(PressableStyle(shape: Capsule(), fill: .clear, pressedFill: .tertiary))
+                .buttonStyle(HighlightButtonStyle(shape: Capsule()))
                 .help(item.help)
             }
         }
         .padding(3)
-        .background(Capsule().fill(.quaternary))
-    }
-}
-
-/// Shared press feedback: darker fill and a slight shrink while held.
-struct PressableStyle<S: Shape>: ButtonStyle {
-    private let shape: S
-    private let fill: AnyShapeStyle
-    private let pressedFill: AnyShapeStyle
-    private let foreground: AnyShapeStyle
-
-    init(
-        shape: S,
-        fill: some ShapeStyle = HierarchicalShapeStyle.quaternary,
-        pressedFill: some ShapeStyle = HierarchicalShapeStyle.tertiary,
-        foreground: some ShapeStyle = HierarchicalShapeStyle.primary
-    ) {
-        self.shape = shape
-        self.fill = AnyShapeStyle(fill)
-        self.pressedFill = AnyShapeStyle(pressedFill)
-        self.foreground = AnyShapeStyle(foreground)
-    }
-
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .foregroundStyle(foreground)
-            .background(shape.fill(configuration.isPressed ? pressedFill : fill))
-            .contentShape(shape)
-            .scaleEffect(configuration.isPressed ? 0.94 : 1)
-            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
+        .glassSurface(in: Capsule())
     }
 }

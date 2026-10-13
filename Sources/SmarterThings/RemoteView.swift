@@ -42,13 +42,15 @@ struct RemoteView: View {
         VStack(spacing: 16) {
             header
             HStack(alignment: .top, spacing: 0) {
-                buttons
+                GlassEffectContainer { buttons }
                 Divider().padding(.horizontal, 18)
-                VStack(alignment: .leading, spacing: 16) {
-                    if model.canLaunchApps {
-                        AppShortcutsSection(model: shortcuts, onLaunch: model.launch)
+                GlassEffectContainer {
+                    VStack(alignment: .leading, spacing: 16) {
+                        if model.canLaunchApps {
+                            AppShortcutsSection(model: shortcuts, onLaunch: model.launch)
+                        }
+                        TypeOnTVField(model: typing, canSearch: model.canSearch)
                     }
-                    TypeOnTVField(model: typing, canSearch: model.canSearch)
                 }
                 .frame(width: 236)
             }
@@ -147,11 +149,10 @@ struct RemoteView: View {
                 .font(.system(size: 12, weight: .bold))
                 .frame(width: 28, height: 28)
         }
-        .buttonStyle(PressableStyle(
+        .buttonStyle(GlassSurfaceButtonStyle(
             shape: Circle(),
-            fill: isOn ? Color.red : Color.secondary.opacity(0.18),
-            pressedFill: isOn ? Color.red.opacity(0.7) : Color.secondary.opacity(0.3),
-            foreground: isOn ? Color.white : Color.secondary
+            tint: isOn ? .red : nil,
+            foreground: isOn ? .white : .secondary
         ))
         .animation(.easeOut(duration: 0.15), value: isOn)
         .disabled(!model.supports(.powerOff))

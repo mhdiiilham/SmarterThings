@@ -96,7 +96,7 @@ private struct AppTile: View {
                     .frame(width: 56)
             }
         }
-        .buttonStyle(PressableStyle(shape: RoundedRectangle(cornerRadius: 10), fill: Color.clear))
+        .buttonStyle(HighlightButtonStyle(shape: RoundedRectangle(cornerRadius: 10)))
         .help("Open \(app.name)")
     }
 }
@@ -114,7 +114,7 @@ private struct AddTile: View {
                 Text("Add").font(.system(size: 10)).foregroundStyle(.secondary)
             }
         }
-        .buttonStyle(PressableStyle(shape: RoundedRectangle(cornerRadius: 10), fill: Color.clear))
+        .buttonStyle(HighlightButtonStyle(shape: RoundedRectangle(cornerRadius: 10)))
         .foregroundStyle(.secondary)
         .help("Add a favorite app")
     }

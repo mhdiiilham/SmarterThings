@@ -6,7 +6,7 @@ A macOS menu bar remote for Samsung smart TVs. Click the TV icon in the menu bar
 
 ## Requirements
 
-- macOS 14 or later
+- macOS 26 or later (the UI uses Liquid Glass)
 - Swift 6 toolchain. Xcode's Command Line Tools are enough; full Xcode isn't needed.
 - A Samsung TV from 2016 or later (Tizen), added to your SmartThings account
 - For typing and app shortcuts: the Mac and the TV on the same network

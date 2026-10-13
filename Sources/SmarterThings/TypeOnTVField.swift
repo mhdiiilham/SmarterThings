@@ -39,7 +39,7 @@ struct TypeOnTVField: View {
             .padding(.leading, 12)
             .padding(.trailing, 5)
             .frame(height: 32)
-            .background(Capsule().fill(.quaternary))
+            .glassSurface(in: Capsule())
 
             statusLine
         }
