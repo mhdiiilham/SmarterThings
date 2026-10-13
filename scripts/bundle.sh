@@ -1,12 +1,14 @@
 #!/usr/bin/env bash
-# Builds a release binary and wraps it in TVRemote.app (menu bar only, no Dock icon).
+# Builds the app and wraps it in TVRemote.app (menu bar only, no Dock icon).
+# Usage: scripts/bundle.sh [release|debug]   (default: release)
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
 app="TVRemote.app"
+configuration="${1:-release}"
 
-swift build -c release --product TVRemoteApp
-binary="$(swift build -c release --show-bin-path)/TVRemoteApp"
+swift build -c "$configuration" --product TVRemoteApp
+binary="$(swift build -c "$configuration" --show-bin-path)/TVRemoteApp"
 
 rm -rf "$app"
 mkdir -p "$app/Contents/MacOS"
