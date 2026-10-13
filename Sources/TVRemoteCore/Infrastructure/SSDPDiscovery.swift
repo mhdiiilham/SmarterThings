@@ -1,11 +1,22 @@
 import Foundation
 
-/// Sends one SSDP M-SEARCH for Samsung TV remote receivers and collects who answers.
+/// Finds Samsung TVs with SSDP M-SEARCH and collects the addresses that answer.
 /// Plain BSD sockets: replies come from the TV's own address, not the multicast group.
 public enum SSDPDiscovery {
     private static let multicastAddress = "239.255.255.250"
     private static let ssdpPort: UInt16 = 1900
-    private static let searchTarget = "urn:samsung.com:device:RemoteControlReceiver:1"
+    /// Older TVs answer the Samsung remote target; newer ones (e.g. 2025 models) only answer DIAL.
+    private static let searchTargets = [
+        "urn:samsung.com:device:RemoteControlReceiver:1",
+        "urn:dial-multiscreen-org:service:dial:1",
+    ]
+
+    /// Chromecasts and other streaming devices answer DIAL too; keep only Samsung's UPnP stack.
+    static func isSamsungReply(_ reply: String) -> Bool {
+        reply.split(whereSeparator: \.isNewline).contains { line in
+            line.lowercased().hasPrefix("server:") && line.localizedCaseInsensitiveContains("samsung")
+        }
+    }
 
     public static func samsungTVHosts(timeout: TimeInterval = 3) async -> [String] {
         await Task.detached { search(timeout: timeout) }.value
@@ -24,33 +35,35 @@ public enum SSDPDiscovery {
         groupAddress.sin_port = ssdpPort.bigEndian
         inet_pton(AF_INET, multicastAddress, &groupAddress.sin_addr)
 
-        let request = Array("""
-        M-SEARCH * HTTP/1.1\r
-        HOST: \(multicastAddress):\(ssdpPort)\r
-        MAN: "ssdp:discover"\r
-        MX: 2\r
-        ST: \(searchTarget)\r
-        \r
+        let sentCount = searchTargets.filter { target in
+            let request = Array("""
+            M-SEARCH * HTTP/1.1\r
+            HOST: \(multicastAddress):\(ssdpPort)\r
+            MAN: "ssdp:discover"\r
+            MX: 2\r
+            ST: \(target)\r
+            \r
 
-        """.utf8)
-        let sent = withUnsafePointer(to: &groupAddress) {
-            $0.withMemoryRebound(to: sockaddr.self, capacity: 1) {
-                sendto(socketDescriptor, request, request.count, 0, $0, socklen_t(MemoryLayout<sockaddr_in>.size))
-            }
-        }
-        guard sent >= 0 else { return [] }
+            """.utf8)
+            return withUnsafePointer(to: &groupAddress) {
+                $0.withMemoryRebound(to: sockaddr.self, capacity: 1) {
+                    sendto(socketDescriptor, request, request.count, 0, $0, socklen_t(MemoryLayout<sockaddr_in>.size))
+                }
+            } >= 0
+        }.count
+        guard sentCount > 0 else { return [] }
 
         var hosts: [String] = []
         let deadline = Date().addingTimeInterval(timeout)
         while Date() < deadline {
-            if let host = receiveReplyHost(socketDescriptor), !hosts.contains(host) {
-                hosts.append(host)
+            if let reply = receiveReply(socketDescriptor), isSamsungReply(reply.text), !hosts.contains(reply.host) {
+                hosts.append(reply.host)
             }
         }
         return hosts
     }
 
-    private static func receiveReplyHost(_ socketDescriptor: Int32) -> String? {
+    private static func receiveReply(_ socketDescriptor: Int32) -> (host: String, text: String)? {
         var buffer = [UInt8](repeating: 0, count: 2048)
         var sender = sockaddr_in()
         var senderLength = socklen_t(MemoryLayout<sockaddr_in>.size)
@@ -63,6 +76,7 @@ public enum SSDPDiscovery {
         var hostBuffer = [CChar](repeating: 0, count: Int(INET_ADDRSTRLEN))
         inet_ntop(AF_INET, &sender.sin_addr, &hostBuffer, socklen_t(INET_ADDRSTRLEN))
         let hostBytes = hostBuffer.prefix { $0 != 0 }.map { UInt8(bitPattern: $0) }
-        return String(decoding: hostBytes, as: UTF8.self)
+        let text = String(decoding: buffer.prefix(received), as: UTF8.self)
+        return (String(decoding: hostBytes, as: UTF8.self), text)
     }
 }

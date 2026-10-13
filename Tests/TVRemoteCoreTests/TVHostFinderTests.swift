@@ -2,8 +2,13 @@ import Testing
 @testable import TVRemoteCore
 
 struct TVHostFinderTests {
-    @Test func manualHostWinsOverDiscovery() async throws {
+    @Test func discoveryWinsSoAChangedIPIsPickedUp() async throws {
         let finder = TVHostFinder(manualHost: { "10.0.0.5" }, discover: { ["10.0.0.9"] })
+        #expect(try await finder.host() == "10.0.0.9")
+    }
+
+    @Test func manualHostIsTheFallbackWhenNothingIsDiscovered() async throws {
+        let finder = TVHostFinder(manualHost: { "10.0.0.5" }, discover: { [] })
         #expect(try await finder.host() == "10.0.0.5")
     }
 

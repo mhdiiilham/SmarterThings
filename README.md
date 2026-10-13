@@ -85,7 +85,7 @@ The app reaches the TV in two ways, because neither one can do everything:
 
 ### Local network (Samsung Tizen remote protocol)
 
-1. **Discovery.** An SSDP `M-SEARCH` for `urn:samsung.com:device:RemoteControlReceiver:1`. An IP address you entered by hand takes priority.
+1. **Discovery.** SSDP `M-SEARCH` for `urn:samsung.com:device:RemoteControlReceiver:1` (older TVs) and `urn:dial-multiscreen-org:service:dial:1` (newer TVs, e.g. 2025 models), keeping only replies whose `SERVER` header says Samsung. A manually entered IP is used only when discovery finds nothing, so a TV that gets a new IP from the router is found again automatically.
 2. **Connect.** A WebSocket to port 8002, with the app name base64-encoded in `name` and the saved pairing token in `token`. The TV replies `ms.channel.connect`; the first time, that reply includes the new token. The TV uses a self-signed certificate, which the app trusts only for the TV's own address.
 3. **Typing.** `ms.remote.control` with `TypeOfRemote: "SendInputString"` and base64 text, then `SendInputEnd` to apply it.
 4. **Apps.** `ms.channel.emit` with `ed.installedApp.get` lists the apps. `ed.apps.launch` opens one, using `DEEP_LINK` for web apps (`app_type` 2) and `NATIVE_LAUNCH` for the others.

@@ -1,4 +1,5 @@
-/// Finds the TV's LAN address: a manually entered address wins, otherwise SSDP discovery.
+/// Finds the TV's LAN address. Discovery comes first so a changed IP (DHCP) is picked up;
+/// a manually entered address is only the fallback when discovery finds nothing.
 public actor TVHostFinder {
     private let manualHost: @Sendable () -> String?
     private let discover: @Sendable () async -> [String]
@@ -13,11 +14,13 @@ public actor TVHostFinder {
     }
 
     public func host() async throws -> String {
-        if let manual = manualHost(), !manual.isEmpty { return manual }
         if let discoveredHost { return discoveredHost }
-        guard let found = await discover().first else { throw LocalTVError.tvNotFound }
-        discoveredHost = found
-        return found
+        if let found = await discover().first {
+            discoveredHost = found
+            return found
+        }
+        if let manual = manualHost(), !manual.isEmpty { return manual }
+        throw LocalTVError.tvNotFound
     }
 
     /// Call after a connection failure so the next attempt searches again.
