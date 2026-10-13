@@ -16,4 +16,6 @@ public enum LocalTVError: Error, Equatable {
     case accessDenied
     case noResponse
     case unsupportedKey
+    /// The TV answered with an unexpected HTTP status (e.g. 404: app not installed).
+    case requestFailed(status: Int)
 }

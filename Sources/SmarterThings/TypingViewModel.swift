@@ -9,7 +9,6 @@ final class TypingViewModel {
         case idle
         case sending
         case sent
-        case searched
         case failed(String, canEnterAddress: Bool)
     }
 
@@ -19,17 +18,10 @@ final class TypingViewModel {
     private(set) var manualHost: String
 
     private let keyboard: TVKeyboard
-    private let searchOnTV: (String) async throws -> Void
     private let defaults: UserDefaults
 
-    /// `searchOnTV` runs the TV's own search through SmartThings (works anywhere, no pairing).
-    init(
-        keyboard: TVKeyboard,
-        searchOnTV: @escaping (String) async throws -> Void,
-        defaults: UserDefaults = .standard
-    ) {
+    init(keyboard: TVKeyboard, defaults: UserDefaults = .standard) {
         self.keyboard = keyboard
-        self.searchOnTV = searchOnTV
         self.defaults = defaults
         manualHost = defaults.string(forKey: Self.manualHostKey) ?? ""
     }
@@ -42,19 +34,6 @@ final class TypingViewModel {
             status = .sent
         } catch {
             status = Self.failure(for: error)
-        }
-    }
-
-    func search(_ query: String) async {
-        guard !query.isEmpty else { return }
-        status = .sending
-        do {
-            try await searchOnTV(query)
-            status = .searched
-        } catch RemoteError.tokenExpired {
-            status = .failed("Your SmartThings token expired. Paste a new one with the key button.", canEnterAddress: false)
-        } catch {
-            status = .failed("Search failed: \(error.localizedDescription)", canEnterAddress: false)
         }
     }
 

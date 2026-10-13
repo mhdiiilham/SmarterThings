@@ -42,7 +42,7 @@ struct LocalAppOpeningTests {
     @Test func notInstalledAppFailsToOpen() async {
         let finder = TVHostFinder(manualHost: { "192.168.0.223" }, discover: { [] })
         let apps = LocalInstalledApps(hostFinder: finder, transport: RoutingTransport(routes: [:]))
-        await #expect(throws: RemoteError.requestFailed(status: 404)) {
+        await #expect(throws: LocalTVError.requestFailed(status: 404)) {
             try await apps.open(TVApp(id: "9999999999999", name: "Nope"))
         }
     }

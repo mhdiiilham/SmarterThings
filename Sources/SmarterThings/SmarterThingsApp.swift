@@ -10,9 +10,6 @@ struct SmarterThingsApp: App {
     private let keyboard = KeyboardViewModel(keyboard: BluetoothHIDKeyboard())
 
     init() {
-        let tokenStore = FileTokenStore(name: "smartthings-token")
-        let controller = SmartThingsClient(tokenStore: tokenStore)
-
         let hostFinder = TVHostFinder(
             manualHost: { UserDefaults.standard.string(forKey: TypingViewModel.manualHostKey) },
             chosenDeviceID: { UserDefaults.standard.string(forKey: LocalTVPickerViewModel.chosenDeviceIDKey) }
@@ -28,15 +25,8 @@ struct SmarterThingsApp: App {
         self.localTVs = localTVs
         let localApps = LocalInstalledApps(hostFinder: hostFinder)
 
-        // Every key goes over Wi-Fi (no token, no rate limit); SmartThings is only a fallback.
-        let keyDispatcher = KeyDispatcher(
-            local: localTV,
-            cloud: controller,
-            localKeys: Set(RemoteKey.allCases).subtracting([.powerOn])
-        )
         let power = PowerControl(
-            keys: keyDispatcher,
-            cloud: controller,
+            keys: localTV,
             localPowerState: {
                 guard let host = try? await hostFinder.host() else { return .unreachable }
                 return await LocalTVDiscovery.powerState(host: host)
@@ -48,15 +38,8 @@ struct SmarterThingsApp: App {
                 try await WakeOnLAN.wake(macAddress: mac)
             }
         )
-        model = RemoteViewModel(
-            localTVs: localTVs,
-            controller: controller,
-            keyDispatcher: keyDispatcher,
-            appLauncher: AppLauncher(local: localApps, cloud: controller),
-            power: power,
-            tokenStore: tokenStore
-        )
-        typing = TypingViewModel(keyboard: localTV) { [model] query in try await model.search(query) }
+        model = RemoteViewModel(localTVs: localTVs, keys: localTV, apps: localApps, power: power)
+        typing = TypingViewModel(keyboard: localTV)
         shortcuts = AppShortcutsViewModel(knownApps: PopularApps.all, installedAppFinder: localApps)
 
         // Search at launch, not when the popover opens: the first search triggers macOS's

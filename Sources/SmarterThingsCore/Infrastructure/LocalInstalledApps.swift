@@ -34,7 +34,7 @@ public struct LocalInstalledApps: InstalledAppFinder, TVAppOpener {
         let request = Self.openRequest(for: app, host: host)
         let (_, response) = try await transport.send(request)
         guard (200..<300).contains(response.statusCode) else {
-            throw RemoteError.requestFailed(status: response.statusCode)
+            throw LocalTVError.requestFailed(status: response.statusCode)
         }
     }
 

@@ -1,10 +1,9 @@
 import SwiftUI
 
-/// Sends text to the TV: Return types into the open Samsung keyboard (local network),
-/// the magnifier runs the TV's own search (SmartThings cloud).
+/// Sends text to whatever Samsung keyboard is open on the TV (e.g. Tizen's own search).
+/// For apps with their own keyboard (YouTube, Netflix), use the Bluetooth keyboard.
 struct TypeOnTVField: View {
     let model: TypingViewModel
-    let canSearch: Bool
     // `@State` is a macro whose plugin only ships with Xcode; see TokenView.
     private let textState = State(initialValue: "")
     private let addressState = State(initialValue: "")
@@ -15,19 +14,10 @@ struct TypeOnTVField: View {
                 Image(systemName: "keyboard")
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(.secondary)
-                TextField("Type or search…", text: textState.projectedValue)
+                TextField("Type on TV…", text: textState.projectedValue)
                     .textFieldStyle(.plain)
                     .font(.system(size: 12))
                     .onSubmit(send)
-                if canSearch {
-                    Button(action: search) {
-                        Image(systemName: "magnifyingglass.circle.fill").font(.system(size: 17))
-                    }
-                    .buttonStyle(.borderless)
-                    .foregroundStyle(.secondary)
-                    .disabled(isBusyOrEmpty)
-                    .help("Search on TV")
-                }
                 Button(action: send) {
                     Image(systemName: "arrow.up.circle.fill").font(.system(size: 17))
                 }
@@ -49,15 +39,11 @@ struct TypeOnTVField: View {
     private var statusLine: some View {
         switch model.status {
         case .idle:
-            caption(canSearch
-                ? "Return types into the TV's keyboard. The magnifier searches the TV."
-                : "Open a search box on the TV, then type here.", style: .secondary)
+            caption("Types into Samsung's on-screen keyboard. For YouTube or Netflix, use the Bluetooth keyboard.", style: .secondary)
         case .sending:
             caption("Sending… The first time, choose Allow on the TV.", style: .secondary)
         case .sent:
-            caption("Sent. YouTube and Netflix ignore typing; use the magnifier.", style: .green)
-        case .searched:
-            caption("Search sent to TV.", style: .green)
+            caption("Sent to TV.", style: .green)
         case .failed(let message, let canEnterAddress):
             caption(message, style: .orange)
             if canEnterAddress { addressField }
@@ -87,14 +73,6 @@ struct TypeOnTVField: View {
 
     private var isBusyOrEmpty: Bool {
         textState.wrappedValue.isEmpty || model.status == .sending
-    }
-
-    private func search() {
-        let query = textState.wrappedValue
-        Task {
-            await model.search(query)
-            if model.status == .searched { textState.wrappedValue = "" }
-        }
     }
 
     private func send() {

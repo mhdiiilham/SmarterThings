@@ -6,7 +6,7 @@
 
 A macOS menu bar remote for Samsung smart TVs. Click the TV icon in the menu bar to get a remote with a D-pad, volume and channel rockers, media keys, input sources, favorite app shortcuts, and your Mac's keyboard as a Bluetooth keyboard for the TV.
 
-It talks to the TV directly over Wi-Fi, so there's no account, token or setup. A SmartThings token is optional and adds a few extras.
+It talks to the TV directly over Wi-Fi and Bluetooth: no account, no cloud, no token.
 
 > Not affiliated with or endorsed by Samsung. "Samsung" and "SmartThings" are trademarks of Samsung Electronics.
 
@@ -15,7 +15,7 @@ It talks to the TV directly over Wi-Fi, so there's no account, token or setup. A
 - macOS 26 or later (the UI uses Liquid Glass)
 - Swift 6 toolchain. Xcode's Command Line Tools are enough; full Xcode isn't needed.
 - A Samsung TV from 2016 or later (Tizen) on the same network as the Mac
-- Optional: a SmartThings account with the TV added, for TV search, named inputs and use away from home
+- For the Bluetooth keyboard: Bluetooth on the Mac
 
 ## Install
 
@@ -65,21 +65,16 @@ If you have several Samsung TVs, pick one from the Wi-Fi menu in the footer. You
 
 | Control | Notes |
 |---|---|
-| Power (top right) | Red means on. Checks the TV's state on every click: on → off, standby → on (both with `KEY_POWER`, since a TV in standby still listens on Wi-Fi), no answer → Wake-on-LAN (needs **Power On with Mobile** on the TV) or SmartThings. |
+| Power (top right) | Red means on. Checks the TV's state on every click: on → off, standby → on (both with `KEY_POWER`, since a TV in standby still listens on Wi-Fi), no answer → Wake-on-LAN (needs **Power On with Mobile** on the TV). |
 | D-pad, OK | Arrow keys, Return and Esc also work while the remote has focus. |
 | Back, Home, Menu, VOL / CH, Mute, ⏪ ▶ ⏸ ⏹ ⏩ | All go straight to the TV over Wi-Fi. |
-| Source (header) | Opens the TV's input menu. With SmartThings, it lists the inputs by name. |
+| Source (header) | Opens the TV's input menu. |
 
-### 3. Type and search on the TV
+### 3. Type into Samsung's keyboard
 
-The field at the bottom:
+Type in **Type on TV…** and press **Return** to send the text to whatever **Samsung keyboard** is open on the TV, e.g. Tizen's own search or the browser's address bar. YouTube and Netflix draw their own keyboards and ignore it; use the Bluetooth keyboard below for them.
 
-- **Return (↑)** types into whatever **Samsung keyboard** is open on the TV, e.g. Tizen's own search or the browser's address bar.
-- **🔍** (with a SmartThings token) runs the **TV's own search** and shows Samsung's search results.
-
-YouTube and Netflix draw their own keyboards and ignore text sent this way. Use the Bluetooth keyboard below for them.
-
-### Keyboard (type with your Mac's keyboard)
+### 4. Keyboard (type with your Mac's keyboard)
 
 SmarterThings can act as a **Bluetooth keyboard** for the TV, which works in every app, including YouTube and Netflix:
 
@@ -88,59 +83,33 @@ SmarterThings can act as a **Bluetooth keyboard** for the TV, which works in eve
 
 The TV is remembered for next time. Quit other keyboard apps (e.g. KeyPad) first, since only one app can act as the Mac's keyboard at a time.
 
-### 4. App shortcuts
+### 5. App shortcuts
 
 Click ✎ next to **Shortcuts**. The app checks which known apps are installed on the TV and lists only those, using the TV's names. Tick up to four, then click ✓. Clicking a tile opens that app on the TV.
 
-### 5. SmartThings (optional)
-
-Click the key button in the footer and paste a Personal Access Token from <https://account.smartthings.com/tokens> (device read and execute access). It adds:
-- 🔍 TV search
-- inputs listed by name (e.g. "PlayStation")
-- a fallback for buttons, apps and power-on when the TV isn't reachable on Wi-Fi, e.g. away from home
-
-Tokens expire after 24 hours. When one does, the remote keeps working over Wi-Fi and only the extras pause until you paste a new one.
-
 ## How it works
 
-The remote is **local-first**: everything goes to the TV over Wi-Fi. SmartThings is used only for what the local protocol can't do, and only when a token exists.
+Everything goes straight to the TV:
 
-| | Local network (default) | SmartThings cloud (optional) |
-|---|---|---|
-| Used for | Every remote key, power state and power off, power on (Wake-on-LAN), opening apps, checking installed apps, typing, finding the TV | TV search, named inputs, fallback when the TV isn't reachable locally |
-| Endpoint | `wss://<tv-ip>:8002/...` (keys, typing), `http://<tv-ip>:8001/api/v2/...` (info, apps), UDP broadcast port 9 (wake) | `https://api.smartthings.com/v1` |
-| Auth | TV pairing token, issued after you click "Allow" on the TV | Personal Access Token (Bearer), expires in 24 hours |
-| Limits | None | 12 commands a minute per TV |
-| Works | Only on the same network as the TV | Anywhere with internet |
-
-### SmartThings cloud
-
-- `GET /devices` lists devices. TVs are recognized by having the `samsungvd.remoteControl` or `tvChannel` capability.
-- `POST /devices/{id}/commands` sends `{"commands":[{"component":"main","capability":…,"command":…,"arguments":[…]}]}`.
-- `GET /devices/{id}/components/main/capabilities/{capability}/status` reads the power state (`switch`) and the input list (`samsungvd.mediaInputSource` or `mediaInputSource`).
-
-| Button | Capability → command |
+| | Used for |
 |---|---|
-| Power | `switch` → `on` / `off` |
-| Volume, mute | `audioVolume` → `volumeUp` / `volumeDown`, `audioMute` → `mute` / `unmute` |
-| Channel | `tvChannel` → `channelUp` / `channelDown` |
-| D-pad, OK, Back, Home, Menu | `samsungvd.remoteControl` → `send` with `[KEY, "PRESS_AND_RELEASED"]` |
-| Media | `mediaPlayback` → `play` / `pause` / `stop` / `rewind` / `fastForward` |
-| Source | `samsungvd.mediaInputSource` → `setInputSource` with an input ID |
-| App shortcut | `custom.launchapp` → `launchApp` with `[appId, appName]` |
-| 🔍 search | `custom.tvsearch` → `search` with `[query, ""]` |
+| `wss://<tv-ip>:8002/api/v2/channels/samsung.remote.control` | Remote keys, typing into Samsung's keyboard |
+| `http://<tv-ip>:8001/api/v2/` | TV name, ID, MAC address, power state; checking and opening apps |
+| UDP broadcast, port 9 | Wake-on-LAN, for a TV that doesn't answer |
+| SSDP (UDP multicast, port 1900) | Finding the TV on the network |
+| Classic Bluetooth (HID) | The Mac as a Bluetooth keyboard |
 
-The command shapes come from SmartThings' capability definitions (`GET /capabilities/{id}/1`). For example, `samsungvd.remoteControl.send` takes a `keyValue` and an optional `keyState`.
+The only credential is the pairing token the TV issues after you click "Allow".
 
-### Local network (Samsung Tizen remote protocol)
+### Samsung Tizen remote protocol
 
 1. **Discovery.** SSDP `M-SEARCH` for `urn:samsung.com:device:RemoteControlReceiver:1` (older TVs) and `urn:dial-multiscreen-org:service:dial:1` (newer TVs, e.g. 2025 models), keeping only replies whose `SERVER` header says Samsung. Each reply's address is then asked for `http://<host>:8001/api/v2/`, which gives the TV's name and its stable `uuid:` ID; only `type: "Samsung SmartTV"` is kept. The TV chosen in the footer menu is matched by that ID. A manually entered IP is used only when discovery finds nothing, so a TV that gets a new IP from the router is found again automatically.
-2. **Installed apps.** For each known app ID, `GET http://<tv-ip>:8001/api/v2/applications/<id>` returns 200 with the app's name if it's installed, or 404 if not. There's no cloud API for listing apps, and `ed.installedApp.get` over the WebSocket isn't confirmed to work on newer firmware.
+2. **Installed apps.** For each known app ID, `GET http://<tv-ip>:8001/api/v2/applications/<id>` returns 200 with the app's name if it's installed, or 404 if not. (`ed.installedApp.get` over the WebSocket isn't confirmed to work on newer firmware.)
 3. **Connect (for typing).** A WebSocket to port 8002, with the app name base64-encoded in `name` and the saved pairing token in `token`. The TV replies `ms.channel.connect`; the first time, that reply includes the new token. The TV uses a self-signed certificate, which the app trusts only for the TV's own address. The TV drops idle connections, so a failed send reconnects once and retries.
 4. **Typing.** `ms.remote.control` with `TypeOfRemote: "SendInputString"` and base64 text, then `SendInputEnd` to apply it.
-5. **Keys.** `ms.remote.control` with `TypeOfRemote: "SendRemoteKey"`, `Cmd: "Click"` and a Samsung key code for every button (`KEY_UP`, `KEY_ENTER`, `KEY_RETURN`, `KEY_HOME`, `KEY_MENU`, `KEY_VOLUP`, `KEY_MUTE`, `KEY_CHUP`, `KEY_PLAY`, `KEY_FF`, `KEY_SOURCE`, `KEY_POWER`, …). `KeyDispatcher` opens the connection when the remote appears, pings it every 20 seconds, and shares one connection attempt between concurrent presses, so the TV only asks "Allow" once. With a SmartThings token, a press goes to the cloud when the connection isn't ready within 1.5 seconds, and local is skipped for 60 seconds after it fails.
-6. **Power.** `GET :8001/api/v2/` reports `PowerState` (`on` or `standby`), and its `wifiMac` is remembered with the TV. `PowerControl` reads it on every click, since `KEY_POWER` is a toggle: `on` → `KEY_POWER` (off); `standby` → `KEY_POWER` (on, because the TV keeps listening on port 8002 in standby); no answer → a Wake-on-LAN magic packet (6×`FF` + 16× the MAC) to UDP port 9, plus SmartThings `switch.on` when a token exists.
-7. **Apps.** `POST :8001/api/v2/applications/<id>` opens an app, with SmartThings `custom.launchapp` as a fallback (`AppLauncher`).
+5. **Keys.** `ms.remote.control` with `TypeOfRemote: "SendRemoteKey"`, `Cmd: "Click"` and a Samsung key code for every button (`KEY_UP`, `KEY_ENTER`, `KEY_RETURN`, `KEY_HOME`, `KEY_MENU`, `KEY_VOLUP`, `KEY_MUTE`, `KEY_CHUP`, `KEY_PLAY`, `KEY_FF`, `KEY_SOURCE`, `KEY_POWER`, …). The connection opens when the remote appears, and concurrent presses share one connection attempt, so the TV only asks "Allow" once. A ping every 10 seconds (3-second pong deadline) and a 1-second send deadline replace a stalled connection, so presses never pile up and arrive in a burst.
+6. **Power.** `GET :8001/api/v2/` reports `PowerState` (`on` or `standby`), and its `wifiMac` is remembered with the TV. `PowerControl` reads it on every click, since `KEY_POWER` is a toggle: `on` → `KEY_POWER` (off); `standby` → `KEY_POWER` (on, because the TV keeps listening on port 8002 in standby); no answer → a Wake-on-LAN magic packet (6×`FF` + 16× the MAC) to UDP port 9.
+7. **Apps.** `POST :8001/api/v2/applications/<id>` opens an app.
 
 ### Bluetooth keyboard (classic Bluetooth HID)
 
@@ -158,13 +127,13 @@ Clean architecture: the UI depends on the core, and the core's domain doesn't de
 
 ```
 Sources/SmarterThingsCore/
-  Domain/           RemoteKey, TV, TVApp, TVCommand, LocalTVDevice, HIDKeyStroke, and the
-                    ports TVController, TVKeyPresser, TVKeyboard, TVAppOpener,
+  Domain/           RemoteKey, TVApp, TVPowerState, LocalTVDevice, HIDKeyStroke, and the
+                    ports TVKeyPresser, TVKeyboard, TVAppOpener,
                     InstalledAppFinder, KeystrokeSender, TokenStore
-  Application/      KeyDispatcher, AppLauncher, PowerControl (local first, cloud fallback)
+  Application/      PowerControl (on / standby / unreachable)
   Infrastructure/   LocalTVRemote + LocalRemoteProtocol (keys, typing), LocalInstalledApps,
                     LocalTVDiscovery, SSDPDiscovery, TVHostFinder, WakeOnLAN,
-                    BluetoothHIDKeyboard + HIDKeyboardProtocol, SmartThingsClient,
+                    BluetoothHIDKeyboard + HIDKeyboardProtocol + HIDReportQueue,
                     FileTokenStore
 Sources/SmarterThings/  SwiftUI MenuBarExtra: views, view models, PopularApps (known app IDs)
 Tests/SmarterThingsCoreTests/  Swift Testing, using fake HTTP transport and token stores
@@ -176,23 +145,23 @@ scripts/dmg.sh        packages it into a drag-to-Applications DMG
 
 | What | Where |
 |---|---|
-| SmartThings token | `~/Library/Application Support/SmarterThings/smartthings-token` |
 | TV pairing token | `~/Library/Application Support/SmarterThings/local-tv-token` |
 | Chosen TV (by ID), last-seen TV (name, IP, MAC for Wake-on-LAN), manually entered TV IP, Bluetooth TV address, favorite apps | app defaults (`com.mhdiiilham.SmarterThings`) |
 
-The token folder is readable only by your user account (0700, with files 0600). Tokens aren't kept in the Keychain because the app is ad-hoc signed: the Keychain treats every rebuild as a new app and asks for your password again.
+The folder is readable only by your user account (0700, with files 0600). The token isn't kept in the Keychain because the app is ad-hoc signed: the Keychain treats every rebuild as a new app and asks for your password again.
 
 ## Limitations
 
-- **Works on your home network.** Without a SmartThings token, the remote needs the Mac and the TV on the same network. With a token, buttons, apps and search also work away from home, through the cloud.
-- **Power on from deep off.** A TV in normal standby turns on with the power key over Wi-Fi. If it doesn't answer at all (deep standby, after a long time off), only Wake-on-LAN (needs **Power On with Mobile** on the TV) or a SmartThings token can wake it. Wake-on-LAN didn't wake the 2025 test TV over Wi-Fi.
+- **Works on your home network.** The Mac and the TV must be on the same network; there's no control from elsewhere.
+- **Power on from deep off needs a TV setting.** A TV in normal standby turns on with the power key over Wi-Fi. If it doesn't answer at all, Wake-on-LAN wakes it, which needs **Settings › General › Network › Expert Settings › Power On with Mobile** enabled on the TV.
 - **Mute isn't read from the TV.** `KEY_MUTE` toggles, and the icon follows your presses, so it can drift if you use the physical remote.
-- **Some extras need SmartThings.** TV search and named inputs only exist in the cloud. Tokens expire after 24 hours, and the cloud allows 12 commands a minute per TV ([rate limits](https://developer.smartthings.com/docs/getting-started/rate-limits)). The remote itself never needs a token.
+- **No named inputs.** Source opens the TV's own input menu; the TV's local API doesn't list inputs by name.
 - **Text typing only reaches Samsung's keyboard.** YouTube and Netflix ignore it; use the Bluetooth keyboard there.
 - **Bluetooth typing only while the menu is open.** Key presses are captured from SmarterThings' own window; system-wide capture would need Input Monitoring permission.
+- **Delete acts as Back in YouTube.** The keyboard sends HID Backspace, which YouTube's TV app treats as "back" while its own keyboard has focus.
 - **Shortcuts only know listed apps.** The picker checks the app IDs in `Sources/SmarterThings/PopularApps.swift` against the TV. Add a missing app's Tizen ID to include it.
 - **App tiles show letters, not icons.** The TV's icons aren't downloaded.
-- **One TV pairing at a time.** Only one local TV token is stored, so switching between TVs makes the new TV ask "Allow" again.
+- **One TV pairing at a time.** Only one TV pairing token is stored, so switching between TVs makes the new TV ask "Allow" again.
 - **Older TVs aren't supported.** Models from 2014–2015 use an older PIN-based pairing protocol.
 - **It isn't notarized.** The app is ad-hoc signed, so other Macs show a Gatekeeper warning on first launch (see Install). Fixing that needs an Apple Developer ID ($99/year) and notarization.
 - **SwiftUI `@State` isn't used.** In the macOS 27 SDK, `@State` is a macro whose plugin ships only with Xcode. The views use the `State` type directly so the app builds with Command Line Tools alone.
@@ -206,14 +175,13 @@ The token folder is readable only by your user account (0700, with files 0600). 
 | Bluetooth keyboard | ✅ Typing works; Delete acts as Back in YouTube |
 | Typing into Tizen's own search | ✅ |
 | Checking installed apps (`/api/v2/applications/<id>`) | ✅ |
-| 🔍 TV search (`custom.tvsearch`) | ✅ |
-| Other keys over Wi-Fi (Back, Home, Menu, CH, Mute, media, Source) | ❓ Not tested yet |
-| Opening apps over Wi-Fi (`POST /applications/<id>`) | ❓ Not tested yet |
+| Other keys over Wi-Fi (Back, Home, Menu, CH, Mute, media, Source) | ✅ |
+| Opening apps over Wi-Fi (`POST /applications/<id>`) | ✅ |
 | Power state (`on` / `standby`) | ✅ |
-| Power on from standby with `KEY_POWER` | ❓ Not tested yet |
-| Power on with Wake-on-LAN | ❌ Didn't wake the test TV over Wi-Fi |
+| Power on from standby with `KEY_POWER` | ✅ |
+| Power on with Wake-on-LAN | ✅ |
 
-The protocol messages, routing and fallbacks are covered by unit tests (`make test`). Rows marked ❓ still need a check against a real TV.
+The protocol messages and power decisions are covered by unit tests (`make test`).
 
 ## License
 

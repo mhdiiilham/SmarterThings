@@ -5,8 +5,7 @@ import SmarterThingsCore
 
 private let keyLog = Logger(subsystem: "com.mhdiiilham.SmarterThings", category: "keys")
 
-/// The remote works over Wi-Fi with no SmartThings token. A token is optional: it adds
-/// TV search, named input sources and cloud fallbacks (e.g. away from home).
+/// Everything goes straight to the TV over Wi-Fi; no account or token.
 @MainActor
 @Observable
 final class RemoteViewModel {
@@ -17,10 +16,6 @@ final class RemoteViewModel {
     }
 
     private(set) var status: Status = .searching
-    /// The SmartThings TV matching the local one; `nil` without a token.
-    private(set) var cloudTV: TV?
-    private(set) var hasToken: Bool
-    private(set) var inputSources: [InputSource] = []
     private(set) var isMuted = false
     /// `nil` while unknown.
     private(set) var isPoweredOn: Bool?
@@ -28,48 +23,33 @@ final class RemoteViewModel {
     private(set) var isChangingPower = false
     /// Short-lived message about a failed command; the remote stays usable.
     private(set) var notice: String?
-    var isEditingToken = false
 
     private let localTVs: LocalTVPickerViewModel
-    private let controller: TVController
-    private let keyDispatcher: KeyDispatcher
-    private let appLauncher: AppLauncher
+    private let keys: TVKeyPresser
+    private let apps: TVAppOpener
     private let power: PowerControl
-    private let tokenStore: TokenStore
     private var noticeDismissal: Task<Void, Never>?
 
-    init(
-        localTVs: LocalTVPickerViewModel,
-        controller: TVController,
-        keyDispatcher: KeyDispatcher,
-        appLauncher: AppLauncher,
-        power: PowerControl,
-        tokenStore: TokenStore
-    ) {
+    init(localTVs: LocalTVPickerViewModel, keys: TVKeyPresser, apps: TVAppOpener, power: PowerControl) {
         self.localTVs = localTVs
-        self.controller = controller
-        self.keyDispatcher = keyDispatcher
-        self.appLauncher = appLauncher
+        self.keys = keys
+        self.apps = apps
         self.power = power
-        self.tokenStore = tokenStore
-        hasToken = tokenStore.token() != nil
     }
 
-    var tvName: String { localTVs.activeDevice?.name ?? cloudTV?.name ?? "TV" }
-    var connectionLabel: String { cloudTV == nil ? "Wi-Fi" : "Wi-Fi + SmartThings" }
+    var tvName: String { localTVs.activeDevice?.name ?? "TV" }
 
     func load() async {
         status = .searching
         await localTVs.searchIfNeeded()
-        await loadCloudTV()
-        status = localTVs.activeDevice != nil || cloudTV != nil ? .ready : .noTVFound
-        await refreshState()
+        status = localTVs.activeDevice != nil ? .ready : .noTVFound
+        await refreshPowerState()
     }
 
     /// Reopening the popover only re-reads the TV's state.
     func loadIfNeeded() async {
         if status == .ready {
-            await refreshState()
+            await refreshPowerState()
         } else {
             await load()
         }
@@ -80,69 +60,19 @@ final class RemoteViewModel {
         await load()
     }
 
-    // MARK: SmartThings (optional)
-
-    func saveToken(_ token: String) async {
-        let trimmedToken = token.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmedToken.isEmpty else { return }
-        do {
-            try tokenStore.save(trimmedToken)
-            isEditingToken = false
-            await load()
-        } catch {
-            showNotice("Couldn't save the token to ~/Library/Application Support/SmarterThings.", for: .seconds(5))
-        }
-    }
-
-    func removeToken() {
-        try? tokenStore.clear()
-        hasToken = false
-        cloudTV = nil
-        inputSources = []
-        isEditingToken = false
-    }
-
-    private func loadCloudTV() async {
-        hasToken = tokenStore.token() != nil
-        guard hasToken else {
-            cloudTV = nil
-            return
-        }
-        do {
-            let televisions = try await controller.televisions()
-            let localName = localTVs.activeDevice?.name
-            cloudTV = televisions.first { $0.name == localName } ?? televisions.first
-        } catch {
-            cloudTV = nil
-            if case RemoteError.tokenExpired = error {
-                showNotice("SmartThings token expired; Wi-Fi control still works. Use the key button to update it.", for: .seconds(8))
-            }
-        }
-    }
-
-    private func refreshState() async {
-        let tv = cloudTV
-        async let poweredOn = power.isPoweredOn(cloudTV: tv)
-        if let tv {
-            inputSources = (try? await controller.inputSources(of: tv)) ?? []
-        } else {
-            inputSources = []
-        }
-        isPoweredOn = await poweredOn
+    private func refreshPowerState() async {
+        isPoweredOn = await power.isPoweredOn()
     }
 
     // MARK: Commands
 
-    /// Keys go over Wi-Fi; SmartThings is only a fallback when a token exists.
-    /// Each press is logged with its route and duration (subsystem com.mhdiiilham.SmarterThings).
+    /// Each press is logged with its duration (subsystem com.mhdiiilham.SmarterThings, category keys).
     func press(_ key: RemoteKey) {
-        let tv = cloudTV
         Task {
             let start = ContinuousClock.now
             do {
-                let route = try await keyDispatcher.press(key, on: tv)
-                let elapsed = start.duration(to: .now)
-                keyLog.notice("\(String(describing: key), privacy: .public) via \(route.rawValue, privacy: .public) in \(elapsed.milliseconds, privacy: .public) ms")
+                try await keys.press(key)
+                keyLog.notice("\(String(describing: key), privacy: .public) in \(start.duration(to: .now).milliseconds, privacy: .public) ms")
             } catch {
                 keyLog.error("\(String(describing: key), privacy: .public) failed: \(String(describing: error), privacy: .public)")
                 showCommandFailure(error)
@@ -150,9 +80,9 @@ final class RemoteViewModel {
         }
     }
 
-    /// Opens the direct TV connection when the remote appears, so the first press is instant.
-    func warmUpLocalKeys() async {
-        await keyDispatcher.warmUp()
+    /// Opens the TV connection when the remote appears, so the first press is instant.
+    func warmUpConnection() async {
+        try? await keys.prepare()
     }
 
     /// Asks the TV for its current state first (the icon may be stale, e.g. after using the
@@ -161,17 +91,16 @@ final class RemoteViewModel {
     func togglePower() {
         guard !isChangingPower else { return }
         isChangingPower = true
-        let tv = cloudTV
         Task {
             do {
-                isPoweredOn = try await power.toggle(cloudTV: tv)
+                isPoweredOn = try await power.toggle()
             } catch {
                 showCommandFailure(error)
             }
             isChangingPower = false
             try? await Task.sleep(for: .seconds(6))
             guard !isChangingPower else { return }
-            isPoweredOn = await power.isPoweredOn(cloudTV: cloudTV)
+            isPoweredOn = await power.isPoweredOn()
         }
     }
 
@@ -181,53 +110,27 @@ final class RemoteViewModel {
         while !Task.isCancelled {
             try? await Task.sleep(for: interval)
             guard !Task.isCancelled, status == .ready, !isChangingPower else { continue }
-            isPoweredOn = await power.isPoweredOn(cloudTV: cloudTV)
+            isPoweredOn = await power.isPoweredOn()
         }
     }
 
-    /// Locally `KEY_MUTE` toggles; the icon tracks presses since the TV doesn't report mute.
+    /// `KEY_MUTE` toggles; the icon tracks presses since the TV doesn't report mute.
     func toggleMute() {
         isMuted.toggle()
         press(isMuted ? .mute : .unmute)
     }
 
-    func selectInput(_ source: InputSource) {
-        guard let tv = cloudTV, let command = tv.selectInputCommand(source) else { return }
-        Task {
-            do {
-                try await controller.send(command, to: tv)
-            } catch {
-                showCommandFailure(error)
-            }
-        }
-    }
-
     func launch(_ app: TVApp) {
-        let tv = cloudTV
         Task {
             do {
-                try await appLauncher.open(app, cloudTV: tv)
+                try await apps.open(app)
             } catch {
                 showCommandFailure(error)
             }
         }
     }
 
-    /// TV-wide search only exists in SmartThings. Throws so the search field shows its own result.
-    func search(_ query: String) async throws {
-        guard let tv = cloudTV else { return }
-        try await controller.send(.search(query), to: tv)
-    }
-
-    /// Apps open over Wi-Fi, so shortcuts need no token.
     var canLaunchApps: Bool { status == .ready }
-    var canSearch: Bool { cloudTV?.canSearch ?? false }
-
-    /// Every key works over Wi-Fi; away from home, the SmartThings TV's capabilities decide.
-    func supports(_ key: RemoteKey) -> Bool {
-        if localTVs.activeDevice != nil { return true }
-        return cloudTV?.supports(key) ?? false
-    }
 
     // MARK: Notices
 
@@ -239,14 +142,10 @@ final class RemoteViewModel {
             showNotice("The TV blocked this Mac. Allow \"SmarterThings (Mac)\" on the TV.", for: .seconds(6))
         case LocalTVError.noResponse:
             showNotice("The TV didn't respond. If it's asking to allow this Mac, choose Allow.", for: .seconds(5))
+        case LocalTVError.requestFailed(404):
+            showNotice("That app isn't installed on the TV.", for: .seconds(4))
         case WakeOnLAN.Failure.invalidMACAddress:
             showNotice("Can't turn the TV on yet: open SmarterThings once while the TV is on.", for: .seconds(6))
-        case RemoteError.tokenExpired:
-            showNotice("SmartThings token expired. Use the key button to update it.", for: .seconds(6))
-        case RemoteError.rateLimited(let retryAfter):
-            showNotice(Self.rateLimitMessage(retryAfter), for: .seconds(min(retryAfter ?? 5, 15)))
-        case RemoteError.requestFailed(let statusCode):
-            showNotice("Command failed (HTTP \(statusCode)).", for: .seconds(4))
         default:
             showNotice(error.localizedDescription, for: .seconds(4))
         }
@@ -260,11 +159,6 @@ final class RemoteViewModel {
             guard !Task.isCancelled else { return }
             self?.notice = nil
         }
-    }
-
-    private static func rateLimitMessage(_ retryAfter: Int?) -> String {
-        let wait = retryAfter.map { "in \($0)s" } ?? "in a moment"
-        return "SmartThings allows 12 commands a minute per TV. Try again \(wait)."
     }
 }
 
