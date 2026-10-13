@@ -8,6 +8,9 @@ A macOS menu bar remote for Samsung smart TVs. Click the TV icon in the menu bar
 
 It talks to the TV directly over Wi-Fi and Bluetooth: no account, no cloud, no token.
 
+> [!WARNING]
+> **Use at your own risk.** This app was written with [Claude Code](https://claude.com/claude-code). I don't have SwiftUI or macOS development experience, so I haven't reviewed the code the way an experienced Swift developer would. It works on my TV, but it may have bugs or rough edges. It's provided as is, without warranty (see the [license](LICENSE)).
+
 > Not affiliated with or endorsed by Samsung. "Samsung" and "SmartThings" are trademarks of Samsung Electronics.
 
 ## Requirements
