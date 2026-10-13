@@ -25,6 +25,7 @@ cat > "$app/Contents/Info.plist" <<PLIST
     <key>CFBundleVersion</key><string>1</string>
     <key>LSMinimumSystemVersion</key><string>14.0</string>
     <key>LSUIElement</key><true/>
+    <key>NSLocalNetworkUsageDescription</key><string>TV Remote connects to your Samsung TV on this network so you can type into it.</string>
 </dict>
 </plist>
 PLIST

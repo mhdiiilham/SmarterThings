@@ -1,0 +1,67 @@
+import Foundation
+import Observation
+import TVRemoteCore
+
+@MainActor
+@Observable
+final class TypingViewModel {
+    enum Status: Equatable {
+        case idle
+        case sending
+        case sent
+        case failed(String, canEnterAddress: Bool)
+    }
+
+    nonisolated static let manualHostKey = "localTVHost"
+
+    private(set) var status: Status = .idle
+    private(set) var manualHost: String
+
+    private let keyboard: TVKeyboard
+    private let defaults: UserDefaults
+
+    init(keyboard: TVKeyboard, defaults: UserDefaults = .standard) {
+        self.keyboard = keyboard
+        self.defaults = defaults
+        manualHost = defaults.string(forKey: Self.manualHostKey) ?? ""
+    }
+
+    func type(_ text: String) async {
+        guard !text.isEmpty else { return }
+        status = .sending
+        do {
+            try await keyboard.type(text)
+            status = .sent
+        } catch {
+            status = Self.failure(for: error)
+        }
+    }
+
+    func saveManualHost(_ host: String) {
+        manualHost = host.trimmingCharacters(in: .whitespacesAndNewlines)
+        defaults.set(manualHost, forKey: Self.manualHostKey)
+        status = .idle
+    }
+
+    private static func failure(for error: Error) -> Status {
+        switch error {
+        case KeyboardError.tvNotFound:
+            .failed(
+                "Couldn't reach the TV on this network. Check Local Network access for TV Remote "
+                    + "in System Settings › Privacy & Security, or enter the TV's IP address.",
+                canEnterAddress: true
+            )
+        case KeyboardError.accessDenied:
+            .failed(
+                "The TV blocked this Mac. On the TV, open Settings › General › External Device Manager "
+                    + "› Device Connection Manager and allow \"TV Remote (Mac)\".",
+                canEnterAddress: false
+            )
+        case KeyboardError.noResponse:
+            .failed("The TV didn't answer. If it asked to allow this Mac, choose Allow and try again.",
+                    canEnterAddress: true)
+        default:
+            .failed(error.localizedDescription, canEnterAddress: true)
+        }
+    }
+}

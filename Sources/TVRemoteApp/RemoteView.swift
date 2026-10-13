@@ -3,6 +3,7 @@ import TVRemoteCore
 
 struct RemoteView: View {
     let model: RemoteViewModel
+    let typing: TypingViewModel
 
     var body: some View {
         VStack(spacing: 0) {
@@ -34,6 +35,14 @@ struct RemoteView: View {
     }
 
     private var remote: some View {
+        VStack(spacing: 18) {
+            buttons
+            TypeOnTVField(model: typing)
+        }
+    }
+
+    /// Arrow/Return/Esc shortcuts live here, not on the text field, so typing isn't hijacked.
+    private var buttons: some View {
         VStack(spacing: 18) {
             header
             DirectionPad(onPress: model.press)

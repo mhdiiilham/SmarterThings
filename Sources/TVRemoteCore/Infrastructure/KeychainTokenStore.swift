@@ -1,13 +1,14 @@
 import Foundation
 import Security
 
-/// Stores the SmartThings token as a generic password in the login Keychain.
+/// Stores a token as a generic password in the login Keychain.
 public struct KeychainTokenStore: TokenStore {
     private let service: String
-    private let account = "smartthings-token"
+    private let account: String
 
-    public init(service: String = "com.mo.TVRemote") {
+    public init(service: String = "com.mo.TVRemote", account: String = "smartthings-token") {
         self.service = service
+        self.account = account
     }
 
     public func token() -> String? {
