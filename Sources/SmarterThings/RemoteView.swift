@@ -21,6 +21,7 @@ struct RemoteView: View {
         }
         .frame(width: model.status == .ready ? 724 : 300)
         .task { await model.loadIfNeeded() }
+        .task { await model.warmUpLocalKeys() }
         .task { await localTVs.searchIfNeeded() }
     }
 

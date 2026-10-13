@@ -1,6 +1,9 @@
 import Foundation
 import Observation
+import OSLog
 import SmarterThingsCore
+
+private let keyLog = Logger(subsystem: "com.mhdiiilham.SmarterThings", category: "keys")
 
 @MainActor
 @Observable
@@ -81,15 +84,25 @@ final class RemoteViewModel {
     }
 
     /// Routed by KeyDispatcher: D-pad and volume go local when possible, the rest via cloud.
+    /// Each press is logged with its route and duration (Console: subsystem com.mhdiiilham.SmarterThings).
     func press(_ key: RemoteKey) {
         guard let tv = selectedTV else { return }
         Task {
+            let start = ContinuousClock.now
             do {
-                try await keyDispatcher.press(key, on: tv)
+                let route = try await keyDispatcher.press(key, on: tv)
+                let elapsed = start.duration(to: .now)
+                keyLog.info("\(String(describing: key), privacy: .public) via \(route.rawValue, privacy: .public) in \(elapsed.milliseconds, privacy: .public) ms")
             } catch {
+                keyLog.error("\(String(describing: key), privacy: .public) failed: \(String(describing: error), privacy: .public)")
                 showCommandFailure(error)
             }
         }
+    }
+
+    /// Opens the direct TV connection when the remote appears, so the first press is instant.
+    func warmUpLocalKeys() async {
+        await keyDispatcher.warmUp()
     }
 
     /// When the state is unknown, turn on: harmless if the TV is already on.
@@ -197,5 +210,11 @@ final class RemoteViewModel {
         default:
             status = .failed(error.localizedDescription)
         }
+    }
+}
+
+private extension Duration {
+    var milliseconds: Int {
+        Int(components.seconds * 1000 + components.attoseconds / 1_000_000_000_000_000)
     }
 }

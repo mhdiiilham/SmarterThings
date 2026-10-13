@@ -11,6 +11,9 @@ public actor LocalTVRemote: TVKeyboard, TVKeyPresser {
     private var socket: URLSessionWebSocketTask?
     /// Shared by concurrent callers so rapid presses open one connection (and one prompt).
     private var pendingConnection: Task<URLSessionWebSocketTask, Error>?
+    private var keepAlive: Task<Void, Never>?
+    /// The TV closes idle connections; a ping this often keeps the next press instant.
+    private let keepAliveInterval: Duration = .seconds(20)
 
     public init(
         hostFinder: TVHostFinder,
@@ -32,6 +35,10 @@ public actor LocalTVRemote: TVKeyboard, TVKeyPresser {
     }
 
 
+    public func prepare() async throws {
+        _ = try await connectedSocket()
+    }
+
     public func press(_ key: RemoteKey) async throws {
         guard let message = LocalRemoteProtocol.keyMessage(key) else { throw LocalTVError.unsupportedKey }
         try await withSocket { socket in
@@ -41,6 +48,8 @@ public actor LocalTVRemote: TVKeyboard, TVKeyPresser {
 
     /// Closes the connection, e.g. after switching to another TV.
     public func disconnect() {
+        keepAlive?.cancel()
+        keepAlive = nil
         socket?.cancel(with: .goingAway, reason: nil)
         socket = nil
     }
@@ -69,7 +78,33 @@ public actor LocalTVRemote: TVKeyboard, TVKeyPresser {
         defer { pendingConnection = nil }
         let newSocket = try await connection.value
         socket = newSocket
+        startKeepAlive(for: newSocket)
         return newSocket
+    }
+
+    private func startKeepAlive(for socket: URLSessionWebSocketTask) {
+        keepAlive?.cancel()
+        let interval = keepAliveInterval
+        keepAlive = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: interval)
+                guard !Task.isCancelled else { return }
+                let isAlive = await withCheckedContinuation { continuation in
+                    socket.sendPing { error in continuation.resume(returning: error == nil) }
+                }
+                if !isAlive {
+                    await self?.dropSocket(socket)
+                    return
+                }
+            }
+        }
+    }
+
+    /// Forgets a dead connection so the next press reconnects right away.
+    private func dropSocket(_ dead: URLSessionWebSocketTask) {
+        guard socket === dead else { return }
+        socket = nil
+        keepAlive = nil
     }
 
     private func openSocket() async throws -> URLSessionWebSocketTask {

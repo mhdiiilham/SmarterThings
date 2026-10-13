@@ -115,11 +115,13 @@ public final class BluetoothHIDKeyboard: NSObject, KeystrokeSender {
         return channel
     }
 
+    /// `writeAsync` copies the bytes into IOBluetooth's buffer and returns at once, so typing
+    /// never waits on the radio (`writeSync` blocked the main thread until each report was sent).
     private func write(_ bytes: [UInt8], on channel: IOBluetoothL2CAPChannel?) throws {
         guard let channel else { throw Failure.notConnected }
         var buffer = bytes
         let result = buffer.withUnsafeMutableBytes { pointer in
-            channel.writeSync(pointer.baseAddress, length: UInt16(pointer.count))
+            channel.writeAsync(pointer.baseAddress, length: UInt16(pointer.count), refcon: nil)
         }
         guard result == kIOReturnSuccess else { throw Failure.writeFailed(result) }
     }

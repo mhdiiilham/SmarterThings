@@ -46,13 +46,42 @@ struct KeyDispatcherTests {
         #expect(await local.attempts == 2)
     }
 
+    @Test func slowLocalConnectionUsesTheCloudWithoutGivingUpOnLocal() async throws {
+        let local = FakeKeyPresser(delay: .milliseconds(300))
+        let cloud = RecordingController()
+        let dispatcher = makeDispatcher(local, cloud, timeout: .milliseconds(20))
+
+        let route = try await dispatcher.press(.up, on: tv)
+        #expect(route == .cloud)
+        #expect(await cloud.sent == [RemoteKey.up.command])
+
+        try await dispatcher.press(.down, on: tv)
+        #expect(await local.attempts == 2)   // still tried locally, not paused
+    }
+
+    @Test func pressReportsTheRouteItTook() async throws {
+        let dispatcher = makeDispatcher(FakeKeyPresser(), RecordingController())
+        #expect(try await dispatcher.press(.ok, on: tv) == .local)
+        #expect(try await dispatcher.press(.menu, on: tv) == .cloud)
+    }
+
+    @Test func warmUpOpensTheLocalConnection() async {
+        let local = FakeKeyPresser()
+        await makeDispatcher(local, RecordingController()).warmUp()
+        #expect(await local.prepared)
+    }
+
     private func makeDispatcher(
-        _ local: FakeKeyPresser, _ cloud: RecordingController, clock: TestClock = TestClock()
+        _ local: FakeKeyPresser,
+        _ cloud: RecordingController,
+        clock: TestClock = TestClock(),
+        timeout: Duration = .seconds(5)
     ) -> KeyDispatcher {
         KeyDispatcher(
             local: local,
             cloud: cloud,
             localKeys: [.up, .down, .left, .right, .ok, .volumeUp, .volumeDown],
+            localTimeout: timeout,
             localRetryInterval: 60,
             now: { clock.now }
         )
@@ -61,15 +90,23 @@ struct KeyDispatcherTests {
 
 private actor FakeKeyPresser: TVKeyPresser {
     private let failure: Error?
+    private let delay: Duration?
     private(set) var pressed: [RemoteKey] = []
     private(set) var attempts = 0
+    private(set) var prepared = false
 
-    init(failure: Error? = nil) {
+    init(failure: Error? = nil, delay: Duration? = nil) {
         self.failure = failure
+        self.delay = delay
+    }
+
+    func prepare() async throws {
+        prepared = true
     }
 
     func press(_ key: RemoteKey) async throws {
         attempts += 1
+        if let delay { try await Task.sleep(for: delay) }
         if let failure { throw failure }
         pressed.append(key)
     }
