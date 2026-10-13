@@ -136,14 +136,18 @@ final class KeyboardViewModel {
 
     private static func message(for error: Error) -> String {
         switch error {
-        case BluetoothHIDKeyboard.Failure.connectionFailed:
-            "Couldn't connect. Make sure the TV is on and KeyPad (or another keyboard app) isn't connected."
-        case BluetoothHIDKeyboard.Failure.channelFailed:
-            "The TV didn't accept the keyboard. Remove the Mac from the TV's Bluetooth devices and try again."
+        case BluetoothHIDKeyboard.Failure.connectionFailed(let code):
+            "Couldn't connect (\(hex(code))). Make sure the TV is on and KeyPad (or another keyboard app) isn't connected."
+        case BluetoothHIDKeyboard.Failure.channelFailed(let psm, let code):
+            "The TV didn't accept the keyboard (channel 0x\(String(psm, radix: 16)), \(hex(code))). Try again; if it keeps failing, remove the Mac from the TV's Bluetooth devices."
         case BluetoothHIDKeyboard.Failure.bluetoothUnavailable:
             "Couldn't set up Bluetooth. Is Bluetooth on, and allowed for SmarterThings?"
         default:
             error.localizedDescription
         }
+    }
+
+    private static func hex(_ code: IOReturn) -> String {
+        "0x" + String(UInt32(bitPattern: code), radix: 16)
     }
 }

@@ -1,5 +1,8 @@
 import Foundation
 import IOBluetooth
+import OSLog
+
+private let bluetoothLog = Logger(subsystem: "com.mhdiiilham.SmarterThings", category: "bluetooth")
 
 /// Makes the Mac act as a Bluetooth keyboard for the TV (classic Bluetooth HID):
 /// publishes a keyboard SDP record, presents the Mac as a keyboard, connects to the TV
@@ -47,13 +50,17 @@ public final class BluetoothHIDKeyboard: NSObject, KeystrokeSender {
         try publishServiceRecordIfNeeded()
         presentAsKeyboard()
 
+        let name = device.name ?? device.addressString ?? "device"
+        bluetoothLog.info("connecting to \(name, privacy: .public); already connected: \(device.isConnected(), privacy: .public)")
         try await openBasebandConnection(to: device)
         self.device = device
 
         do {
-            controlChannel = try await openChannel(on: device, psm: HIDKeyboardProtocol.controlPSM)
-            interruptChannel = try await openChannel(on: device, psm: HIDKeyboardProtocol.interruptPSM)
+            controlChannel = try await openChannelRetryingOnce(on: device, psm: HIDKeyboardProtocol.controlPSM)
+            interruptChannel = try await openChannelRetryingOnce(on: device, psm: HIDKeyboardProtocol.interruptPSM)
+            bluetoothLog.info("HID channels open to \(name, privacy: .public)")
         } catch {
+            bluetoothLog.error("connect to \(name, privacy: .public) failed: \(String(describing: error), privacy: .public)")
             disconnect()
             throw error
         }
@@ -101,6 +108,18 @@ public final class BluetoothHIDKeyboard: NSObject, KeystrokeSender {
                 connectionContinuation = nil
                 continuation.resume(throwing: Failure.connectionFailed(result))
             }
+        }
+    }
+
+    /// A channel can be refused while the link is still authenticating; one retry after a
+    /// short pause usually gets through.
+    private func openChannelRetryingOnce(on device: IOBluetoothDevice, psm: UInt16) async throws -> IOBluetoothL2CAPChannel {
+        do {
+            return try await openChannel(on: device, psm: psm)
+        } catch {
+            bluetoothLog.notice("PSM 0x\(String(psm, radix: 16), privacy: .public) failed (\(String(describing: error), privacy: .public)); retrying")
+            try await Task.sleep(for: .seconds(1))
+            return try await openChannel(on: device, psm: psm)
         }
     }
 
