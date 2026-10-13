@@ -105,7 +105,9 @@ struct RemoteView: View {
         HStack(spacing: 10) {
             VStack(alignment: .leading, spacing: 1) {
                 if model.televisions.count > 1 {
-                    Picker("TV", selection: Binding(get: { model.selectedTV }, set: model.select)) {
+                    // Keep the closure: passing `model.select` directly crashes the Swift 6.3
+                    // compiler (Xcode 26.6) while converting it to Binding's @isolated(any) setter.
+                    Picker("TV", selection: Binding(get: { model.selectedTV }, set: { model.select($0) })) {
                         ForEach(model.televisions) { tv in Text(tv.name).tag(Optional(tv)) }
                     }
                     .labelsHidden()
