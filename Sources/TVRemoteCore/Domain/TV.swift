@@ -1,4 +1,4 @@
-public struct TV: Equatable, Identifiable, Sendable {
+public struct TV: Hashable, Identifiable, Sendable {
     public let id: String
     public let name: String
     public let capabilities: Set<String>
@@ -29,7 +29,7 @@ public struct TV: Equatable, Identifiable, Sendable {
     }
 }
 
-public struct InputSource: Equatable, Identifiable, Sendable {
+public struct InputSource: Hashable, Identifiable, Sendable {
     public let id: String
     public let name: String
 
