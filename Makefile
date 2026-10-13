@@ -7,6 +7,7 @@ export VERSION
 run:
 	./scripts/bundle.sh debug
 	-pkill -x SmarterThings
+	@while pgrep -x SmarterThings >/dev/null; do sleep 0.2; done
 	open SmarterThings.app
 
 # Quit the running app (same as Quit in the remote's footer).
