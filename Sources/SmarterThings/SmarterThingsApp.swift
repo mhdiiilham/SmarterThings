@@ -30,6 +30,11 @@ struct SmarterThingsApp: App {
             await hostFinder.forgetDiscoveredHost()
             await localTV.disconnect()
         }
+
+        // Search at launch, not when the popover opens: the first search triggers macOS's
+        // "Allow local network" prompt, which takes focus and would close the popover.
+        let localTVs = localTVs
+        Task { await localTVs.searchIfNeeded() }
     }
 
     var body: some Scene {
