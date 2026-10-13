@@ -1,0 +1,122 @@
+import Testing
+@testable import SmarterThingsCore
+
+/// Behavior without a SmartThings token (no cloud TV), and the cloud as fallback only.
+struct LocalFirstTests {
+    private let cloudTV = TV(id: "tv-1", name: "TV", capabilities: ["custom.launchapp"])
+    private let youTube = TVApp(id: "111299001912", name: "YouTube")
+
+    // MARK: KeyDispatcher without a cloud TV
+
+    @Test func withoutTokenKeysGoLocal() async throws {
+        let dispatcher = KeyDispatcher(local: Presser(), cloud: Cloud(), localKeys: [.home])
+        #expect(try await dispatcher.press(.home, on: nil) == .local)
+    }
+
+    @Test func withoutTokenALocalFailureIsReported() async {
+        let dispatcher = KeyDispatcher(local: Presser(failure: LocalTVError.tvNotFound), cloud: Cloud(), localKeys: [.home])
+        await #expect(throws: LocalTVError.tvNotFound) { try await dispatcher.press(.home, on: nil) }
+    }
+
+    @Test func withoutTokenAKeyWithNoLocalRouteFails() async {
+        let dispatcher = KeyDispatcher(local: Presser(), cloud: Cloud(), localKeys: [])
+        await #expect(throws: LocalTVError.unsupportedKey) { try await dispatcher.press(.powerOn, on: nil) }
+    }
+
+    // MARK: AppLauncher
+
+    @Test func appsOpenLocallyFirst() async throws {
+        let opener = Opener(), cloud = Cloud()
+        try await AppLauncher(local: opener, cloud: cloud).open(youTube, cloudTV: cloudTV)
+        #expect(await opener.opened == [youTube])
+        #expect(await cloud.sent.isEmpty)
+    }
+
+    @Test func appsFallBackToTheCloudWithAToken() async throws {
+        let cloud = Cloud()
+        try await AppLauncher(local: Opener(failure: LocalTVError.tvNotFound), cloud: cloud).open(youTube, cloudTV: cloudTV)
+        #expect(await cloud.sent == [.launch(youTube)])
+    }
+
+    @Test func appsFailWithoutLocalOrToken() async {
+        let launcher = AppLauncher(local: Opener(failure: LocalTVError.tvNotFound), cloud: Cloud())
+        await #expect(throws: LocalTVError.tvNotFound) { try await launcher.open(youTube, cloudTV: nil) }
+    }
+
+    // MARK: PowerControl
+
+    @Test func powerStateComesFromTheTVFirst() async {
+        let power = makePower(localState: false, cloud: Cloud(isOn: true))
+        #expect(await power.isPoweredOn(cloudTV: cloudTV) == false)
+    }
+
+    @Test func unreachableTVWithoutTokenCountsAsOff() async {
+        #expect(await makePower(localState: nil).isPoweredOn(cloudTV: nil) == false)
+    }
+
+    @Test func unreachableTVAsksTheCloud() async {
+        #expect(await makePower(localState: nil, cloud: Cloud(isOn: true)).isPoweredOn(cloudTV: cloudTV) == true)
+    }
+
+    @Test func turningOnWithoutTokenUsesWakeOnLAN() async throws {
+        let woke = Flag()
+        try await makePower(wake: { await woke.set() }).turnOn(cloudTV: nil)
+        #expect(await woke.isSet)
+    }
+
+    @Test func turningOnSucceedsIfTheCloudWorksWhenWakeOnLANCant() async throws {
+        let cloud = Cloud()
+        try await makePower(cloud: cloud, wake: { throw WakeOnLAN.Failure.invalidMACAddress }).turnOn(cloudTV: cloudTV)
+        #expect(await cloud.sent == [RemoteKey.powerOn.command])
+    }
+
+    @Test func turningOnFailsWhenNothingWorks() async {
+        let power = makePower(wake: { throw WakeOnLAN.Failure.invalidMACAddress })
+        await #expect(throws: WakeOnLAN.Failure.invalidMACAddress) { try await power.turnOn(cloudTV: nil) }
+    }
+
+    private func makePower(
+        localState: Bool? = true,
+        cloud: Cloud = Cloud(),
+        wake: @escaping @Sendable () async throws -> Void = {}
+    ) -> PowerControl {
+        PowerControl(
+            keys: KeyDispatcher(local: Presser(), cloud: cloud, localKeys: [.powerOff]),
+            cloud: cloud,
+            localPowerState: { localState },
+            wake: wake
+        )
+    }
+}
+
+private actor Presser: TVKeyPresser {
+    private let failure: Error?
+    init(failure: Error? = nil) { self.failure = failure }
+    func prepare() async throws {}
+    func press(_ key: RemoteKey) async throws { if let failure { throw failure } }
+}
+
+private actor Opener: TVAppOpener {
+    private let failure: Error?
+    private(set) var opened: [TVApp] = []
+    init(failure: Error? = nil) { self.failure = failure }
+    func open(_ app: TVApp) async throws {
+        if let failure { throw failure }
+        opened.append(app)
+    }
+}
+
+private actor Cloud: TVController {
+    private let isOn: Bool
+    private(set) var sent: [TVCommand] = []
+    init(isOn: Bool = false) { self.isOn = isOn }
+    func televisions() async throws -> [TV] { [] }
+    func inputSources(of tv: TV) async throws -> [InputSource] { [] }
+    func isPoweredOn(_ tv: TV) async throws -> Bool { isOn }
+    func send(_ command: TVCommand, to tv: TV) async throws { sent.append(command) }
+}
+
+private actor Flag {
+    private(set) var isSet = false
+    func set() { isSet = true }
+}

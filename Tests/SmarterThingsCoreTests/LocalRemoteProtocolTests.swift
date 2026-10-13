@@ -44,8 +44,22 @@ struct LocalRemoteProtocolTests {
             == ["Cmd": "Click", "DataOfCmd": code, "Option": "false", "TypeOfRemote": "SendRemoteKey"])
     }
 
-    @Test func keysWithoutLocalCodeHaveNoMessage() {
-        #expect(LocalRemoteProtocol.keyMessage(.home) == nil)
+    @Test(arguments: RemoteKey.allCases.filter { $0 != .powerOn })
+    func everyKeyButPowerOnHasALocalCode(key: RemoteKey) {
+        #expect(LocalRemoteProtocol.keyMessage(key) != nil)
+    }
+
+    @Test(arguments: [
+        (RemoteKey.back, "KEY_RETURN"), (.home, "KEY_HOME"), (.menu, "KEY_MENU"), (.source, "KEY_SOURCE"),
+        (.mute, "KEY_MUTE"), (.unmute, "KEY_MUTE"), (.powerOff, "KEY_POWER"), (.fastForward, "KEY_FF"),
+    ])
+    func usesSamsungKeyCodes(key: RemoteKey, code: String) throws {
+        let message = try #require(LocalRemoteProtocol.keyMessage(key))
+        #expect(try params(of: message)?["DataOfCmd"] == code)
+    }
+
+    @Test func powerOnHasNoLocalCodeBecauseStandbyTVsUseWakeOnLAN() {
+        #expect(LocalRemoteProtocol.keyMessage(.powerOn) == nil)
     }
 
     private func params(of message: String) throws -> [String: String]? {

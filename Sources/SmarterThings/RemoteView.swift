@@ -19,23 +19,40 @@ struct RemoteView: View {
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
         }
-        .frame(width: model.status == .ready ? 724 : 300)
+        .frame(width: model.status == .ready && !model.isEditingToken ? 724 : 320)
         .task { await model.loadIfNeeded() }
         .task { await model.warmUpLocalKeys() }
-        .task { await localTVs.searchIfNeeded() }
     }
 
     @ViewBuilder
     private var content: some View {
-        switch model.status {
-        case .needsToken(let reason):
-            TokenView(reason: reason) { token in Task { await model.saveToken(token) } }
-        case .loading:
-            ProgressView().controlSize(.small).frame(maxWidth: .infinity, minHeight: 160)
-        case .failed(let message):
-            FailureView(message: message) { Task { await model.load() } }
-        case .ready:
-            remote
+        if model.isEditingToken {
+            TokenView(
+                hasToken: model.hasToken,
+                onSave: { token in Task { await model.saveToken(token) } },
+                onRemove: model.removeToken,
+                onCancel: { model.isEditingToken = false }
+            )
+        } else {
+            switch model.status {
+            case .searching:
+                VStack(spacing: 10) {
+                    ProgressView().controlSize(.small)
+                    Text("Looking for your TV on Wi-Fi…").font(.system(size: 11)).foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, minHeight: 160)
+            case .noTVFound:
+                NoTVFoundView(
+                    onSearchAgain: { Task { await model.searchAgain() } },
+                    onSaveAddress: { address in
+                        typing.saveManualHost(address)
+                        Task { await model.searchAgain() }
+                    },
+                    onConnectSmartThings: { model.isEditingToken = true }
+                )
+            case .ready:
+                remote
+            }
         }
     }
 
@@ -53,7 +70,7 @@ struct RemoteView: View {
                         if model.canLaunchApps {
                             AppShortcutsSection(model: shortcuts, onLaunch: model.launch)
                         }
-                        KeyboardSection(model: keyboard, tvName: model.selectedTV?.name)
+                        KeyboardSection(model: keyboard, tvName: model.tvName)
                         TypeOnTVField(model: typing, canSearch: model.canSearch)
                     }
                 }
@@ -123,44 +140,43 @@ struct RemoteView: View {
     private var header: some View {
         HStack(spacing: 10) {
             VStack(alignment: .leading, spacing: 1) {
-                if model.televisions.count > 1 {
-                    // Keep the closure: passing `model.select` directly crashes the Swift 6.3
-                    // compiler (Xcode 26.6) while converting it to Binding's @isolated(any) setter.
-                    Picker("TV", selection: Binding(get: { model.selectedTV }, set: { model.select($0) })) {
-                        ForEach(model.televisions) { tv in Text(tv.name).tag(Optional(tv)) }
-                    }
-                    .labelsHidden()
-                    .fixedSize()
-                } else {
-                    Text(model.selectedTV?.name ?? "TV")
-                        .font(.system(size: 13, weight: .semibold))
-                        .lineLimit(1)
-                }
-                Text("SmartThings")
+                Text(model.tvName)
+                    .font(.system(size: 13, weight: .semibold))
+                    .lineLimit(1)
+                Text(model.connectionLabel)
                     .font(.system(size: 10))
                     .foregroundStyle(.secondary)
             }
             Spacer(minLength: 0)
-            if !model.inputSources.isEmpty {
-                sourceMenu
-            }
+            sourceControl
             powerButton
         }
     }
 
-    private var sourceMenu: some View {
-        Menu {
-            Section("Source") {
-                ForEach(model.inputSources) { source in
-                    Button(source.name) { model.selectInput(source) }
+    /// Named inputs need SmartThings; without it, Source opens the TV's own input menu.
+    @ViewBuilder
+    private var sourceControl: some View {
+        if model.inputSources.isEmpty {
+            Button("Source") { model.press(.source) }
+                .buttonStyle(.borderless)
+                .font(.system(size: 12))
+                .help("Open the TV's input menu")
+        } else {
+            Menu {
+                Section("Source") {
+                    ForEach(model.inputSources) { source in
+                        Button(source.name) { model.selectInput(source) }
+                    }
                 }
+                Divider()
+                Button("Open Input Menu on TV") { model.press(.source) }
+            } label: {
+                Text("Source").font(.system(size: 12))
             }
-        } label: {
-            Text("Source").font(.system(size: 12))
+            .menuStyle(.borderlessButton)
+            .fixedSize()
+            .help("Switch input (HDMI, TV…)")
         }
-        .menuStyle(.borderlessButton)
-        .fixedSize()
-        .help("Switch input (HDMI, TV…)")
     }
 
     private var powerButton: some View {
@@ -183,8 +199,8 @@ struct RemoteView: View {
     private var footer: some View {
         HStack(spacing: 14) {
             if model.status == .ready {
-                FooterButton(symbol: "arrow.clockwise", help: "Refresh TVs") { Task { await model.load() } }
-                FooterButton(symbol: "key", help: "Change token") { model.changeToken() }
+                FooterButton(symbol: "arrow.clockwise", help: "Search for the TV again") { Task { await model.searchAgain() } }
+                FooterButton(symbol: "key", help: "SmartThings (optional)") { model.isEditingToken = true }
                 LocalTVMenu(model: localTVs)
             }
             Spacer()
@@ -246,9 +262,12 @@ private struct FooterButton: View {
     }
 }
 
+/// SmartThings is optional: it adds TV search, named inputs and use away from home.
 private struct TokenView: View {
-    let reason: String?
+    let hasToken: Bool
     let onSave: (String) -> Void
+    let onRemove: () -> Void
+    let onCancel: () -> Void
     // `@State` is a macro in this SDK and its plugin only ships with Xcode; the plain
     // State type still works because SwiftUI finds DynamicProperty fields itself.
     private let tokenState = State(initialValue: "")
@@ -256,37 +275,61 @@ private struct TokenView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Image(systemName: "tv").font(.system(size: 22)).foregroundStyle(.tint)
-            Text("Connect to SmartThings").font(.system(size: 13, weight: .semibold))
-            Text(reason ?? "Create a Personal Access Token with device read and execute access, then paste it here.")
+            Text("SmartThings (optional)").font(.system(size: 13, weight: .semibold))
+            Text("The remote works over Wi-Fi without this. A token adds TV search, named input sources and control away from home. Tokens expire after 24 hours.")
                 .font(.system(size: 11))
-                .foregroundStyle(reason == nil ? Color.secondary : Color.orange)
+                .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
             Link("Create a token ↗", destination: URL(string: "https://account.smartthings.com/tokens")!)
                 .font(.system(size: 11))
-            SecureField("Paste token", text: tokenState.projectedValue)
+            SecureField(hasToken ? "Paste a new token" : "Paste token", text: tokenState.projectedValue)
                 .textFieldStyle(.roundedBorder)
                 .onSubmit { onSave(token) }
-            Button { onSave(token) } label: {
-                Text("Connect").frame(maxWidth: .infinity)
+            HStack {
+                Button("Cancel", action: onCancel)
+                if hasToken {
+                    Button("Remove Token", role: .destructive, action: onRemove)
+                }
+                Spacer()
+                Button("Save") { onSave(token) }
+                    .buttonStyle(.borderedProminent)
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(token.isEmpty)
             }
-            .buttonStyle(.borderedProminent)
-            .keyboardShortcut(.defaultAction)
-            .disabled(token.isEmpty)
+            .controlSize(.small)
         }
     }
 }
 
-private struct FailureView: View {
-    let message: String
-    let onRetry: () -> Void
+/// Shown when no TV answers on Wi-Fi and there's no SmartThings TV either.
+private struct NoTVFoundView: View {
+    let onSearchAgain: () -> Void
+    let onSaveAddress: (String) -> Void
+    let onConnectSmartThings: () -> Void
+    private let addressState = State(initialValue: "")
 
     var body: some View {
         VStack(spacing: 10) {
-            Image(systemName: "exclamationmark.triangle.fill").font(.title2).foregroundStyle(.orange)
-            Text(message).font(.system(size: 12)).multilineTextAlignment(.center)
-            Button("Try Again", action: onRetry).buttonStyle(.bordered)
+            Image(systemName: "tv.slash").font(.title2).foregroundStyle(.secondary)
+            Text("No TV found on this Wi-Fi").font(.system(size: 13, weight: .semibold))
+            Text("Make sure the TV is on and on the same network, and that SmarterThings is allowed in System Settings › Privacy & Security › Local Network.")
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+            Button("Search Again", action: onSearchAgain).buttonStyle(.glass)
+            HStack(spacing: 6) {
+                TextField("Or enter the TV's IP address", text: addressState.projectedValue)
+                    .textFieldStyle(.roundedBorder)
+                    .onSubmit { onSaveAddress(addressState.wrappedValue) }
+                Button("Use") { onSaveAddress(addressState.wrappedValue) }
+                    .disabled(addressState.wrappedValue.isEmpty)
+            }
+            .controlSize(.small)
+            Button("Connect SmartThings instead…", action: onConnectSmartThings)
+                .buttonStyle(.borderless)
+                .font(.system(size: 11))
         }
-        .frame(maxWidth: .infinity, minHeight: 160)
+        .frame(maxWidth: .infinity)
     }
 }

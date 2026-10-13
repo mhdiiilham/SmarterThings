@@ -31,13 +31,20 @@ enum LocalRemoteProtocol {
         ])
     }
 
-    /// Samsung key codes for the keys sent over the local connection.
+    /// Samsung key codes for remote keys. `powerOn` has none: a TV in standby isn't listening
+    /// on this connection, so it's woken with Wake-on-LAN instead. `KEY_POWER` and `KEY_MUTE`
+    /// are toggles, so callers only send them when the current state is known.
     private static let keyCodes: [RemoteKey: String] = [
+        .powerOff: "KEY_POWER",
+        .volumeUp: "KEY_VOLUP", .volumeDown: "KEY_VOLDOWN", .mute: "KEY_MUTE", .unmute: "KEY_MUTE",
+        .channelUp: "KEY_CHUP", .channelDown: "KEY_CHDOWN",
         .up: "KEY_UP", .down: "KEY_DOWN", .left: "KEY_LEFT", .right: "KEY_RIGHT", .ok: "KEY_ENTER",
-        .volumeUp: "KEY_VOLUP", .volumeDown: "KEY_VOLDOWN",
+        .back: "KEY_RETURN", .home: "KEY_HOME", .menu: "KEY_MENU",
+        .play: "KEY_PLAY", .pause: "KEY_PAUSE", .stop: "KEY_STOP", .rewind: "KEY_REWIND", .fastForward: "KEY_FF",
+        .source: "KEY_SOURCE",
     ]
 
-    /// `nil` for keys that don't have a local key code here.
+    /// `nil` for keys that have no local key code (`powerOn`).
     static func keyMessage(_ key: RemoteKey) -> String? {
         guard let code = keyCodes[key] else { return nil }
         return remoteControl(["Cmd": "Click", "DataOfCmd": code, "Option": "false", "TypeOfRemote": "SendRemoteKey"])

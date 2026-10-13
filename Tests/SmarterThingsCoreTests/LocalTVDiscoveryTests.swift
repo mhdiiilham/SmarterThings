@@ -15,6 +15,22 @@ struct LocalTVDiscoveryTests {
         ))
     }
 
+    @Test func keepsTheWiFiMACForWakeOnLAN() {
+        let info = #"{"device": {"id": "uuid:1", "name": "TV", "type": "Samsung SmartTV", "wifiMac": "CC:20:AC:5E:4A:E1"}}"#
+        #expect(LocalTVDiscovery.parseDeviceInfo(Data(info.utf8), host: "10.0.0.2")?.macAddress == "CC:20:AC:5E:4A:E1")
+    }
+
+    @Test(arguments: [("on", true), ("standby", false), ("Off", false)])
+    func readsPowerState(state: String, isOn: Bool) {
+        let info = #"{"device": {"id": "uuid:1", "name": "TV", "type": "Samsung SmartTV", "PowerState": "\#(state)"}}"#
+        #expect(LocalTVDiscovery.parsePowerState(Data(info.utf8)) == isOn)
+    }
+
+    @Test func answeringWithoutPowerStateMeansOn() {
+        let info = #"{"device": {"id": "uuid:1", "name": "TV", "type": "Samsung SmartTV"}}"#
+        #expect(LocalTVDiscovery.parsePowerState(Data(info.utf8)) == true)
+    }
+
     @Test func rejectsNonTVDevices() {
         let info = #"{"device": {"id": "uuid:1", "name": "Soundbar", "type": "Samsung Speaker"}}"#
         #expect(LocalTVDiscovery.parseDeviceInfo(Data(info.utf8), host: "10.0.0.2") == nil)

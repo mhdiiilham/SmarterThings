@@ -23,7 +23,7 @@ struct RemoteKeyCommandTests {
 
     @Test(arguments: [
         (RemoteKey.up, "UP"), (.down, "DOWN"), (.left, "LEFT"), (.right, "RIGHT"),
-        (.ok, "OK"), (.back, "BACK"), (.home, "HOME"), (.menu, "MENU"),
+        (.ok, "OK"), (.back, "BACK"), (.home, "HOME"), (.menu, "MENU"), (.source, "SOURCE"),
     ])
     func navigationKeySendsPressAndRelease(key: RemoteKey, keyValue: String) {
         #expect(key.command == TVCommand(

@@ -4,6 +4,8 @@ public enum RemoteKey: CaseIterable, Sendable {
     case channelUp, channelDown
     case up, down, left, right, ok, back, home, menu
     case play, pause, stop, rewind, fastForward
+    /// Opens the TV's input (source) menu.
+    case source
 
     public var command: TVCommand {
         switch self {
@@ -28,6 +30,7 @@ public enum RemoteKey: CaseIterable, Sendable {
         case .stop: TVCommand(capability: "mediaPlayback", command: "stop")
         case .rewind: TVCommand(capability: "mediaPlayback", command: "rewind")
         case .fastForward: TVCommand(capability: "mediaPlayback", command: "fastForward")
+        case .source: Self.navigation("SOURCE")
         }
     }
 

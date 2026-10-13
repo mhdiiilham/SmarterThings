@@ -1,10 +1,11 @@
 import Foundation
 
 /// Sends remote keys the fastest way available. Keys in `localKeys` go over the local
-/// network (no rate limit). If the local connection isn't ready within `localTimeout`
-/// the key goes via the cloud instead, while the connection keeps opening in the
-/// background. If local fails outright (e.g. away from home) it is skipped for
-/// `localRetryInterval`. Every other key always uses the cloud.
+/// network (no rate limit, no token). The cloud is only a fallback, and only when a
+/// SmartThings TV is given: if the local connection isn't ready within `localTimeout`
+/// that press goes via the cloud while the connection keeps opening; if local fails
+/// outright (e.g. away from home) it's skipped for `localRetryInterval`.
+/// Without a SmartThings TV, local failures are reported instead.
 public actor KeyDispatcher {
     public enum Route: String, Sendable {
         case local
@@ -47,23 +48,33 @@ public actor KeyDispatcher {
         }
     }
 
+    /// `cloudTV` is the matching SmartThings TV, or `nil` when there's no token.
     @discardableResult
-    public func press(_ key: RemoteKey, on tv: TV) async throws -> Route {
-        if localKeys.contains(key), isLocalAvailable {
+    public func press(_ key: RemoteKey, on cloudTV: TV?) async throws -> Route {
+        let isLocalKey = localKeys.contains(key)
+        if isLocalKey, isLocalAvailable || cloudTV == nil {
             do {
-                try await pressLocally(key)
+                try await pressLocally(key, waitingForConnection: cloudTV == nil)
                 return .local
             } catch is LocalTimeout {
                 // Still connecting (or waiting for "Allow"): use the cloud this time only.
             } catch {
+                guard cloudTV != nil else { throw error }
                 localPausedUntil = now().addingTimeInterval(localRetryInterval)
             }
         }
-        try await cloud.send(key.command, to: tv)
+        guard let cloudTV else { throw isLocalKey ? LocalTVError.noResponse : LocalTVError.unsupportedKey }
+        try await cloud.send(key.command, to: cloudTV)
         return .cloud
     }
 
-    private func pressLocally(_ key: RemoteKey) async throws {
+    /// With no cloud to fall back to, there's no point giving up early: wait for the
+    /// connection (and the TV's "Allow") instead of timing out.
+    private func pressLocally(_ key: RemoteKey, waitingForConnection: Bool) async throws {
+        if waitingForConnection {
+            try await local.press(key)
+            return
+        }
         let local = local
         let timeout = localTimeout
         try await withThrowingTaskGroup(of: Void.self) { group in

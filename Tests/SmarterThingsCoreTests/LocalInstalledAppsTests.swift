@@ -32,6 +32,22 @@ struct LocalInstalledAppsTests {
     }
 }
 
+struct LocalAppOpeningTests {
+    @Test func opensAnAppWithAPostToItsApplicationURL() {
+        let request = LocalInstalledApps.openRequest(for: TVApp(id: "111299001912", name: "YouTube"), host: "192.168.0.223")
+        #expect(request.httpMethod == "POST")
+        #expect(request.url?.absoluteString == "http://192.168.0.223:8001/api/v2/applications/111299001912")
+    }
+
+    @Test func notInstalledAppFailsToOpen() async {
+        let finder = TVHostFinder(manualHost: { "192.168.0.223" }, discover: { [] })
+        let apps = LocalInstalledApps(hostFinder: finder, transport: RoutingTransport(routes: [:]))
+        await #expect(throws: RemoteError.requestFailed(status: 404)) {
+            try await apps.open(TVApp(id: "9999999999999", name: "Nope"))
+        }
+    }
+}
+
 /// Answers by URL path (order-independent, for concurrent requests); unknown paths get 404.
 private struct RoutingTransport: HTTPTransport {
     let routes: [String: (Int, String)]

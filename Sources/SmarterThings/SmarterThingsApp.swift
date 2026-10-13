@@ -21,27 +21,46 @@ struct SmarterThingsApp: App {
             hostFinder: hostFinder,
             tokenStore: FileTokenStore(name: "local-tv-token")
         )
-        // The most-pressed keys go over the local network: SmartThings allows only
-        // 12 commands a minute per TV. Everything else stays on the cloud.
-        let keyDispatcher = KeyDispatcher(
-            local: localTV,
-            cloud: controller,
-            localKeys: [.up, .down, .left, .right, .ok, .volumeUp, .volumeDown]
-        )
-        model = RemoteViewModel(controller: controller, keyDispatcher: keyDispatcher, tokenStore: tokenStore)
-        typing = TypingViewModel(keyboard: localTV) { [model] query in try await model.search(query) }
-        shortcuts = AppShortcutsViewModel(
-            knownApps: PopularApps.all,
-            installedAppFinder: LocalInstalledApps(hostFinder: hostFinder)
-        )
-        localTVs = LocalTVPickerViewModel(hostFinder: hostFinder) {
+        let localTVs = LocalTVPickerViewModel(hostFinder: hostFinder) {
             await hostFinder.forgetDiscoveredHost()
             await localTV.disconnect()
         }
+        self.localTVs = localTVs
+        let localApps = LocalInstalledApps(hostFinder: hostFinder)
+
+        // Every key goes over Wi-Fi (no token, no rate limit); SmartThings is only a fallback.
+        let keyDispatcher = KeyDispatcher(
+            local: localTV,
+            cloud: controller,
+            localKeys: Set(RemoteKey.allCases).subtracting([.powerOn])
+        )
+        let power = PowerControl(
+            keys: keyDispatcher,
+            cloud: controller,
+            localPowerState: {
+                guard let host = try? await hostFinder.host() else { return nil }
+                return await LocalTVDiscovery.isPoweredOn(host: host)
+            },
+            wake: {
+                guard let mac = await localTVs.activeDevice?.macAddress else {
+                    throw WakeOnLAN.Failure.invalidMACAddress
+                }
+                try await WakeOnLAN.wake(macAddress: mac)
+            }
+        )
+        model = RemoteViewModel(
+            localTVs: localTVs,
+            controller: controller,
+            keyDispatcher: keyDispatcher,
+            appLauncher: AppLauncher(local: localApps, cloud: controller),
+            power: power,
+            tokenStore: tokenStore
+        )
+        typing = TypingViewModel(keyboard: localTV) { [model] query in try await model.search(query) }
+        shortcuts = AppShortcutsViewModel(knownApps: PopularApps.all, installedAppFinder: localApps)
 
         // Search at launch, not when the popover opens: the first search triggers macOS's
         // "Allow local network" prompt, which takes focus and would close the popover.
-        let localTVs = localTVs
         Task { await localTVs.searchIfNeeded() }
     }
 

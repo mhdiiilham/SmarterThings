@@ -3,7 +3,7 @@ import Foundation
 /// Asks the TV about each known app with `GET http://<tv>:8001/api/v2/applications/<id>`:
 /// 200 with the app's name if installed, 404 if not. Needs no pairing or "Allow" prompt.
 /// (The TV has no cloud API for listing apps, and the WebSocket list request isn't reliable.)
-public struct LocalInstalledApps: InstalledAppFinder {
+public struct LocalInstalledApps: InstalledAppFinder, TVAppOpener {
     private let hostFinder: TVHostFinder
     private let transport: HTTPTransport
 
@@ -26,6 +26,23 @@ public struct LocalInstalledApps: InstalledAppFinder {
             return found
         }
         return found.sorted { $0.0 < $1.0 }.map(\.1)
+    }
+
+    /// `POST` to the same endpoint opens the app; 404 means it isn't installed.
+    public func open(_ app: TVApp) async throws {
+        let host = try await hostFinder.host()
+        let request = Self.openRequest(for: app, host: host)
+        let (_, response) = try await transport.send(request)
+        guard (200..<300).contains(response.statusCode) else {
+            throw RemoteError.requestFailed(status: response.statusCode)
+        }
+    }
+
+    static func openRequest(for app: TVApp, host: String) -> URLRequest {
+        var request = URLRequest(url: URL(string: "http://\(host):8001/api/v2/applications/\(app.id)")!)
+        request.httpMethod = "POST"
+        request.timeoutInterval = 4
+        return request
     }
 
     /// The TV's own name wins, e.g. it calls 3202010022079 "Browser".

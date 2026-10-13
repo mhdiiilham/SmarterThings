@@ -19,7 +19,28 @@ public enum LocalTVDiscovery {
     static func parseDeviceInfo(_ data: Data, host: String) -> LocalTVDevice? {
         guard let info = try? JSONDecoder().decode(DeviceInfo.self, from: data),
               info.device.type == "Samsung SmartTV" else { return nil }
-        return LocalTVDevice(id: info.device.id, name: decodeHTMLEntities(info.device.name), host: host)
+        return LocalTVDevice(
+            id: info.device.id,
+            name: decodeHTMLEntities(info.device.name),
+            host: host,
+            macAddress: info.device.wifiMac
+        )
+    }
+
+    /// Whether the TV at `host` reports `PowerState: "on"`. `nil` when it doesn't answer
+    /// (in deep standby, unplugged, or not on this network).
+    public static func isPoweredOn(host: String, transport: HTTPTransport = URLSession.shared) async -> Bool? {
+        guard let url = URL(string: "http://\(host):8001/api/v2/") else { return nil }
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 2
+        guard let (data, response) = try? await transport.send(request), response.statusCode == 200 else { return nil }
+        return parsePowerState(data)
+    }
+
+    static func parsePowerState(_ data: Data) -> Bool? {
+        guard let info = try? JSONDecoder().decode(DeviceInfo.self, from: data) else { return nil }
+        // Older firmware has no PowerState; answering at all means it's on.
+        return (info.device.PowerState ?? "on").lowercased() == "on"
     }
 
     private static func device(at host: String, transport: HTTPTransport) async -> LocalTVDevice? {
@@ -43,6 +64,8 @@ public enum LocalTVDiscovery {
             let id: String
             let name: String
             let type: String
+            let wifiMac: String?
+            let PowerState: String?
         }
     }
 }
